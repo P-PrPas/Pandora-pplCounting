@@ -20,30 +20,30 @@ Run from the repo root:
 
 ```bash
 /usr/bin/python3 scripts/people_counter.py \
-  data/vlc-record-2026-09-04-11h38m09s-trimmed.mp4 \
-  data/clip1_presentation
+  data/dataset/vlc-record-2026-09-04-11h38m09s-trimmed.mp4 \
+  data/results/v1/clip1_presentation
 /usr/bin/python3 scripts/people_counter.py \
-  data/vlc-record-2026-09-04-13h47m04s-trimmed.mp4 \
-  data/clip2_presentation
+  data/dataset/vlc-record-2026-09-04-13h47m04s-trimmed.mp4 \
+  data/results/v1/clip2_presentation
 /usr/bin/python3 tests/test_zone_counter.py
 /usr/bin/python3 tests/test_presentation.py
 ```
 
 The counting zones, detector settings, tracking settings and counting state machine
 are unchanged. Coordinates remain calibrated for this particular camera framing.
-The original `data/clip1_counted.mp4` remains available for comparison.
+The original `data/results/v1/clip1_counted.mp4` remains available for comparison.
 
 For browser/presentation compatibility, convert the rendered MPEG-4 file to H.264:
 
 ```bash
-ffmpeg -i data/clip1_presentation.mp4 -c:v libx264 -crf 18 \
+ffmpeg -i data/results/v1/clip1_presentation.mp4 -c:v libx264 -crf 18 \
   -preset veryfast -threads 4 -pix_fmt yuv420p -movflags +faststart -an \
-  data/clip1_showcase.mp4
+  data/results/v1/clip1_showcase.mp4
 ```
 
 ## Delivered verification
 
-Both `data/clip1_showcase.mp4` and `data/clip2_showcase.mp4` are H.264 presentation
+Both `data/results/v1/clip1_showcase.mp4` and `data/results/v1/clip2_showcase.mp4` are H.264 presentation
 exports. Their matching `_preview.jpg` files show actual frames at 60 and 10 seconds.
 Each event CSV is checked byte for byte against its original `_counted.csv`:
 clip 1 has 14 entered / 28 exited; clip 2 has 8 entered / 5 exited.

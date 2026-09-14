@@ -10,8 +10,8 @@ beyond it. A→B = **in**, B→A = **out**.
 
 | Clip | Duration | IN | OUT | Events |
 |---|---|---|---|---|
-| `vlc-record-...11h38m09s` (11:30–13:00) | 90s | 14 | 28 | `data/clip1_counted.csv` |
-| `vlc-record-...13h47m04s` (01:45–02:05) | 20s | 8 | 5 | `data/clip2_counted.csv` |
+| `vlc-record-...11h38m09s` (11:30–13:00) | 90s | 14 | 28 | `data/results/v1/clip1_counted.csv` |
+| `vlc-record-...13h47m04s` (01:45–02:05) | 20s | 8 | 5 | `data/results/v1/clip2_counted.csv` |
 
 Both counts were spot-checked against the annotated video frame-by-frame at
 each event timestamp — in every case the crowd's actual direction of travel

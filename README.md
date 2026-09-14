@@ -19,8 +19,9 @@ annotated video with live counts.
 - `docs/` — `REPORT.md` (results + edge-case evaluation + proposed
   enhancements) and `PRESENTATION.md` (render/output notes).
 - `assets/` — bundled fonts used by the renderer.
-- `data/` — input clips and rendered outputs (not tracked upstream; local
-  working directory).
+- `data/` — not tracked upstream; local working directory.
+  - `dataset/` — raw source clips.
+  - `results/v<N>/` — rendered outputs for a given pipeline version (current: `v1`).
 
 ## Quickstart
 
@@ -29,7 +30,7 @@ Run everything from the repo root:
 ```bash
 python3 tests/test_zone_counter.py
 python3 tests/test_presentation.py
-python3 scripts/people_counter.py data/<clip>.mp4 data/<output_prefix>
+python3 scripts/people_counter.py data/dataset/<clip>.mp4 data/results/v1/<output_prefix>
 ```
 
 See `docs/REPORT.md` for results and `docs/PRESENTATION.md` for render/export

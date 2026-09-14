@@ -1,0 +1,11 @@
+# ponytail: copy of ultralytics' bytetrack.yaml with two values tuned for a
+# crowded doorway where people fully block each other's boxes for ~1-2s.
+# Revert to stock bytetrack.yaml if scenes are ever sparse/uncrowded.
+
+tracker_type: bytetrack
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.25
+track_buffer: 60    # was 30 (~1.2s @25fps); 60 (~2.4s) survives longer full occlusions
+match_thresh: 0.8
+fuse_score: True

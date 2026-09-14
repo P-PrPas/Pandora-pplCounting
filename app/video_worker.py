@@ -1,0 +1,96 @@
+"""Background thread running live detect+track+count on the RTSP stream,
+reusing the exact same algorithm/rendering as the batch pipeline.
+"""
+import sys
+import time
+from collections import defaultdict, deque
+from pathlib import Path
+
+import numpy as np
+from PySide6.QtCore import QThread, Signal
+from PySide6.QtGui import QImage
+from ultralytics import YOLO
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+from counting import ZoneCounter, classify_point
+from presentation import draw_track, draw_zones
+
+SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
+MODEL_PATH = SCRIPTS_DIR / "yolo11s.pt"
+TRACKER_CONFIG = SCRIPTS_DIR / "bytetrack_custom.yaml"
+
+TRAIL_LEN = 30
+HIGHLIGHT_FRAMES = 20
+
+
+class VideoWorker(QThread):
+    """Runs model.track() against a live source; emits a rendered frame + counts per detection."""
+
+    frame_ready = Signal(QImage, int, int, int)     # frame, in_count, out_count, active_tracks
+    event_fired = Signal(float, int, str)            # elapsed_s, track_id, "in"|"out"
+    error = Signal(str)
+    finished_clean = Signal()
+
+    def __init__(self, source, enter_zone, exit_zone, parent=None):
+        super().__init__(parent)
+        self.source = source
+        # User's "Enter" -> zone_b (MINT/"inside"), "Exit" -> zone_a (AMBER/"outside"),
+        # matching classify_point's A/B convention with no changes to ZoneCounter itself.
+        self.zone_a = np.array(exit_zone)
+        self.zone_b = np.array(enter_zone)
+        self._stop = False
+
+    def stop(self):
+        self._stop = True
+
+    def run(self):
+        try:
+            model = YOLO(MODEL_PATH)
+            counter = ZoneCounter()
+            trails = defaultdict(lambda: deque(maxlen=TRAIL_LEN))
+            recent_events = {}
+            in_count = out_count = 0
+            start = time.monotonic()
+
+            # ponytail: same call shape as scripts/people_counter.py (device="cpu" for the
+            # same torch/GPU-kernel mismatch; conf=0.1 for the same occlusion mitigation).
+            results = model.track(self.source, classes=[0], conf=0.1, tracker=str(TRACKER_CONFIG),
+                                   stream=True, verbose=False, device="cpu")
+            for frame_idx, r in enumerate(results):
+                if self._stop:
+                    break
+                frame = r.orig_img
+                occupied = []
+                draw_zones(frame, self.zone_a, self.zone_b, occupied, label_a="EXIT", label_b="ENTER")
+                elapsed = time.monotonic() - start
+                active = 0
+
+                if r.boxes is not None and r.boxes.id is not None:
+                    boxes = r.boxes.xyxy.cpu().numpy()
+                    ids = r.boxes.id.cpu().numpy().astype(int)
+                    active = len(ids)
+                    for box, tid in zip(boxes, ids):
+                        x1, y1, x2, y2 = box
+                        foot = (int((x1 + x2) / 2), int(y2))
+                        trails[tid].append(foot)
+
+                        event = counter.update(tid, classify_point(foot, self.zone_a, self.zone_b))
+                        if event:
+                            in_count += event == "in"
+                            out_count += event == "out"
+                            recent_events[tid] = (event, frame_idx)
+                            self.event_fired.emit(elapsed, int(tid), event)
+
+                        last = recent_events.get(tid)
+                        highlighted = bool(last) and frame_idx - last[1] < HIGHLIGHT_FRAMES
+                        draw_track(frame, box, tid, foot, trails[tid], highlighted,
+                                   last[0] if last else None, occupied)
+
+                rgb = frame[:, :, ::-1].copy()
+                h, w, ch = rgb.shape
+                qimg = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888).copy()
+                self.frame_ready.emit(qimg, in_count, out_count, active)
+
+            self.finished_clean.emit()
+        except Exception as e:  # trust boundary: RTSP can die anytime, surface it, don't crash the app
+            self.error.emit(str(e))

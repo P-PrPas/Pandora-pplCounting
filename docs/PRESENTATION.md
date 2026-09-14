@@ -19,10 +19,10 @@ Ultralytics (in this workspace, `/usr/bin/python3`, not the default `python`).
 Run from the repo root:
 
 ```bash
-/usr/bin/python3 scripts/people_counter.py \
+/usr/bin/python3 scripts/v1/people_counter.py \
   data/dataset/vlc-record-2026-09-04-11h38m09s-trimmed.mp4 \
   data/results/v1/clip1_presentation
-/usr/bin/python3 scripts/people_counter.py \
+/usr/bin/python3 scripts/v1/people_counter.py \
   data/dataset/vlc-record-2026-09-04-13h47m04s-trimmed.mp4 \
   data/results/v1/clip2_presentation
 /usr/bin/python3 tests/test_zone_counter.py

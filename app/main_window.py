@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "v1"))
 from presentation import AMBER, BG, LINE, MINT, MUTED, PANEL, WHITE
 
 from video_worker import VideoWorker

@@ -11,11 +11,11 @@ from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QImage
 from ultralytics import YOLO
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "v1"))
 from counting import ZoneCounter, best_device, classify_point
 from presentation import Presentation, draw_track, draw_zones
 
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
+SCRIPTS_DIR = Path(__file__).parent.parent / "scripts" / "v1"
 MODEL_PATH = SCRIPTS_DIR / "yolo11s.pt"
 TRACKER_CONFIG = SCRIPTS_DIR / "bytetrack_custom.yaml"
 
@@ -57,7 +57,7 @@ class VideoWorker(QThread):
             presentation = Presentation(0, label_a="EXIT", label_b="ENTER",
                                          footer="Live RTSP feed · AI-assisted counting")
 
-            # ponytail: same call shape as scripts/people_counter.py. Device auto-picked
+            # ponytail: same call shape as scripts/v1/people_counter.py. Device auto-picked
             # (cuda > mps > cpu) — same weights/precision either way, so this is a free
             # speedup, not an accuracy tradeoff. conf=0.1 for the same occlusion mitigation.
             device = best_device()

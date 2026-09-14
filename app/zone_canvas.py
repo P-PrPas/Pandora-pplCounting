@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, QPointF, QSize, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QImage, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QWidget
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "v1"))
 from presentation import AMBER, MINT, WHITE  # BGR tuples, single source of truth for the palette
 
 ZONES_FILE = Path(__file__).parent / "zones.json"

@@ -2,7 +2,7 @@
 import os
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "v1"))
 
 from counting import best_device
 from people_counter import ZoneCounter

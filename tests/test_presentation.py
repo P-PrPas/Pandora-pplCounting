@@ -1,7 +1,7 @@
 """Run with python3 test_presentation.py; no inference or video required."""
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "v1"))
 
 import numpy as np
 from presentation import Presentation, BG, MINT, TRACK, chip, draw_track, draw_zones

@@ -117,7 +117,8 @@ class Presentation:
     """2560 x 1280 canvas; the full 16:9 feed sits beside clip-level analytics."""
     size = (2560, 1280)
 
-    def __init__(self, duration):
+    def __init__(self, duration, label_a='A / Outside', label_b='B / Inside',
+                 footer='Recorded footage · AI-assisted counting'):
         self.duration = duration
         self.base = np.full((1280, 2560, 3), BG, dtype=np.uint8)
         f = self.base
@@ -140,12 +141,12 @@ class Presentation:
         text(f, 'DIRECTION', 2310, 676, 14, MUTED)
         cv2.line(f, (2028, 704), (2492, 704), LINE, 1)
         text(f, 'HOW TO READ', 40, 1162, 16, MUTED, True)
-        for x, color, title in [(235, TRACK, 'Tracked person'), (540, AMBER, 'A / Outside'), (820, MINT, 'B / Inside')]:
+        for x, color, title in [(235, TRACK, 'Tracked person'), (540, AMBER, label_a), (820, MINT, label_b)]:
             cv2.rectangle(f, (x, 1161), (x+19, 1180), color, 2, cv2.LINE_AA)
             text(f, title, x+32, 1160, 20, WHITE)
         text(f, 'Highlighted track = new crossing', 1090, 1160, 20, MUTED)
         text(f, 'PROOF OF CONCEPT', 40, 1231, 14, MUTED, True)
-        text(f, 'Recorded footage · AI-assisted counting', 2000, 1232, 16, MUTED)
+        text(f, footer, 2000, 1232, 16, MUTED)
 
     def render(self, frame, in_count, out_count, events, elapsed, active):
         canvas = self.base.copy()

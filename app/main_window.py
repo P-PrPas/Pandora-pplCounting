@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
     QStackedWidget, QVBoxLayout, QWidget,
@@ -40,23 +40,6 @@ QPushButton#primary:disabled, QPushButton#danger:disabled {{
 """
 
 
-class StatCard(QWidget):
-    def __init__(self, title, color):
-        super().__init__()
-        self.setProperty("class", "panel")
-        self.setStyleSheet(f"background:{_hex(PANEL)}; border-radius:12px;")
-        lay = QVBoxLayout(self)
-        cap = QLabel(title)
-        cap.setStyleSheet(f"color:{_hex(MUTED)}; font-weight:bold; font-size:12px; background:transparent;")
-        self.value = QLabel("0")
-        self.value.setStyleSheet(f"color:{_hex(color)}; font-size:44px; font-weight:bold; background:transparent;")
-        lay.addWidget(cap)
-        lay.addWidget(self.value)
-
-    def set(self, v):
-        self.value.setText(str(v))
-
-
 class MainWindow(QMainWindow):
     def __init__(self, source, snapshot_bgr):
         super().__init__()
@@ -76,7 +59,8 @@ class MainWindow(QMainWindow):
         dlay = QVBoxLayout(draw_page)
         header = QLabel("Step 1 — Draw the Enter and Exit zones")
         header.setObjectName("title")
-        sub = QLabel("Click points on the frame to trace a zone (3+ points), then Finish. Enter first, then Exit.")
+        sub = QLabel("Click points to trace a zone (3+ points), then press Enter ↵ or click Finish. "
+                      "Draw the Enter zone first, then the Exit zone.")
         sub.setObjectName("subtitle")
         dlay.addWidget(header)
         dlay.addWidget(sub)
@@ -100,15 +84,18 @@ class MainWindow(QMainWindow):
         dlay.addLayout(controls)
         self.stack.addWidget(draw_page)
 
+        # Enter finishes the current zone — no need to reach for the mouse after the last click.
+        for key in (Qt.Key_Return, Qt.Key_Enter):
+            QShortcut(QKeySequence(key), self, activated=self.canvas.finish_current)
+
         # -- step 2: live run --
         run_page = QWidget()
-        rlay = QHBoxLayout(run_page)
-        left = QVBoxLayout()
+        rlay = QVBoxLayout(run_page)
         self.video_label = QLabel("Press Start to begin live inference")
         self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setMinimumSize(800, 600)
+        self.video_label.setMinimumSize(1280, 640)
         self.video_label.setStyleSheet(f"background:{_hex(BG)}; border:1px solid {_hex(LINE)}; border-radius:10px;")
-        left.addWidget(self.video_label, 1)
+        rlay.addWidget(self.video_label, 1)
         btn_row = QHBoxLayout()
         self.start_btn = QPushButton("▶  Start Live Count")
         self.start_btn.setObjectName("primary")
@@ -123,30 +110,18 @@ class MainWindow(QMainWindow):
         btn_row.addWidget(self.stop_btn)
         btn_row.addWidget(self.redraw_btn)
         btn_row.addStretch()
-        left.addLayout(btn_row)
-        rlay.addLayout(left, 3)
-
-        hud = QVBoxLayout()
-        title = QLabel("LIVE COUNT")
-        title.setObjectName("title")
-        hud.addWidget(title)
-        self.in_card = StatCard("ENTERED", MINT)
-        self.out_card = StatCard("EXITED", AMBER)
-        self.active_card = StatCard("ACTIVE TRACKS", WHITE)
-        for c in (self.in_card, self.out_card, self.active_card):
-            hud.addWidget(c)
-        hud.addStretch()
         self.status = QLabel("Idle")
         self.status.setObjectName("subtitle")
-        hud.addWidget(self.status)
-        rlay.addLayout(hud, 1)
+        btn_row.addWidget(self.status)
+        rlay.addLayout(btn_row)
         self.stack.addWidget(run_page)
 
         self._sync_zone_controls()
 
     def _sync_zone_controls(self):
         self.finish_btn.setEnabled(self.canvas.can_finish_current)
-        self.finish_btn.setText("Finish Exit zone" if self.canvas.is_last_zone else "Finish Enter zone")
+        zone = "Exit" if self.canvas.is_last_zone else "Enter"
+        self.finish_btn.setText(f"Finish {zone} zone  (Enter ↵)")
         self.to_run_btn.setEnabled(self.canvas.done)
 
     def _go_to_run_page(self):
@@ -176,13 +151,10 @@ class MainWindow(QMainWindow):
         self.stop_btn.setEnabled(False)
         self.status.setText("Idle")
 
-    def _on_frame(self, qimg, in_count, out_count, active):
+    def _on_frame(self, qimg):
         pix = QPixmap.fromImage(qimg).scaled(
             self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_label.setPixmap(pix)
-        self.in_card.set(f"{in_count:02d}")
-        self.out_card.set(f"{out_count:02d}")
-        self.active_card.set(f"{active:02d}")
 
     def _on_error(self, message):
         self._stop()

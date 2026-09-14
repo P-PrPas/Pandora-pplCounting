@@ -13,7 +13,7 @@ from ultralytics import YOLO
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from counting import ZoneCounter, classify_point
-from presentation import draw_track, draw_zones
+from presentation import Presentation, draw_track, draw_zones
 
 SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
 MODEL_PATH = SCRIPTS_DIR / "yolo11s.pt"
@@ -26,7 +26,7 @@ HIGHLIGHT_FRAMES = 20
 class VideoWorker(QThread):
     """Runs model.track() against a live source; emits a rendered frame + counts per detection."""
 
-    frame_ready = Signal(QImage, int, int, int)     # frame, in_count, out_count, active_tracks
+    frame_ready = Signal(QImage)                      # the full rendered dashboard, ready to display
     event_fired = Signal(float, int, str)            # elapsed_s, track_id, "in"|"out"
     error = Signal(str)
     finished_clean = Signal()
@@ -49,8 +49,12 @@ class VideoWorker(QThread):
             counter = ZoneCounter()
             trails = defaultdict(lambda: deque(maxlen=TRAIL_LEN))
             recent_events = {}
+            events = []  # (elapsed_s, frame_idx, track_id, direction) — feeds the "recent crossings" panel
             in_count = out_count = 0
             start = time.monotonic()
+            # duration is unknown for a live/indefinite stream — same dashboard, no fixed end.
+            presentation = Presentation(0, label_a="EXIT", label_b="ENTER",
+                                         footer="Live RTSP feed · AI-assisted counting")
 
             # ponytail: same call shape as scripts/people_counter.py (device="cpu" for the
             # same torch/GPU-kernel mismatch; conf=0.1 for the same occlusion mitigation).
@@ -79,6 +83,7 @@ class VideoWorker(QThread):
                             in_count += event == "in"
                             out_count += event == "out"
                             recent_events[tid] = (event, frame_idx)
+                            events.append((round(elapsed, 2), frame_idx, int(tid), event))
                             self.event_fired.emit(elapsed, int(tid), event)
 
                         last = recent_events.get(tid)
@@ -86,10 +91,14 @@ class VideoWorker(QThread):
                         draw_track(frame, box, tid, foot, trails[tid], highlighted,
                                    last[0] if last else None, occupied)
 
-                rgb = frame[:, :, ::-1].copy()
+                # duration tracks elapsed itself (no fixed end for a live session) so the
+                # dashboard's time readout and progress bar read as "session running time".
+                presentation.duration = elapsed
+                canvas = presentation.render(frame, in_count, out_count, events, elapsed, active)
+                rgb = canvas[:, :, ::-1].copy()
                 h, w, ch = rgb.shape
                 qimg = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888).copy()
-                self.frame_ready.emit(qimg, in_count, out_count, active)
+                self.frame_ready.emit(qimg)
 
             self.finished_clean.emit()
         except Exception as e:  # trust boundary: RTSP can die anytime, surface it, don't crash the app

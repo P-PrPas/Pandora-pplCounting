@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QPointF, QSize, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPolygonF
+from PySide6.QtGui import QColor, QFontMetrics, QImage, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QWidget
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
@@ -176,6 +176,31 @@ class ZoneCanvas(QWidget):
             pen = QPen(self.current_zone_color, 1, Qt.DashLine)
             painter.setPen(pen)
             painter.drawLine(self._to_widget(self.current_points[-1]), self.hover_pos)
+
+        self._draw_banner(painter)
+
+    def _draw_banner(self, painter):
+        # Always-visible status of which zone is being drawn — the #1 UX complaint fix:
+        # without this the user has no idea Enter vs Exit is currently active.
+        if self.done:
+            label, color = "✓  Both zones set — click Continue", WHITE_COLOR
+        else:
+            n = len(self.current_points)
+            label = f"✏  Drawing: {self.current_zone_name.upper()} ZONE   ({n} point{'s' if n != 1 else ''})"
+            color = self.current_zone_color
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(13)
+        painter.setFont(font)
+        metrics = QFontMetrics(font)
+        pad_x, pad_y = 16, 10
+        rect_w = metrics.horizontalAdvance(label) + pad_x * 2
+        rect_h = metrics.height() + pad_y * 2
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 190))
+        painter.drawRoundedRect(16, 16, rect_w, rect_h, 8, 8)
+        painter.setPen(QPen(color))
+        painter.drawText(16 + pad_x, 16 + pad_y + metrics.ascent(), label)
 
     @property
     def current_zone_color(self):

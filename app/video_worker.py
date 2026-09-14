@@ -51,7 +51,8 @@ class VideoWorker(QThread):
             recent_events = {}
             events = []  # (elapsed_s, frame_idx, track_id, direction) — feeds the "recent crossings" panel
             in_count = out_count = 0
-            start = time.monotonic()
+            start = last_tick = time.monotonic()
+            fps = 0.0
             # duration is unknown for a live/indefinite stream — same dashboard, no fixed end.
             presentation = Presentation(0, label_a="EXIT", label_b="ENTER",
                                          footer="Live RTSP feed · AI-assisted counting")
@@ -71,6 +72,12 @@ class VideoWorker(QThread):
                 draw_zones(frame, self.zone_a, self.zone_b, occupied, label_a="EXIT", label_b="ENTER")
                 elapsed = time.monotonic() - start
                 active = 0
+
+                # EMA smoothing so the readout doesn't flicker frame to frame.
+                now = time.monotonic()
+                inst_fps = 1 / max(1e-6, now - last_tick)
+                fps = inst_fps if frame_idx == 0 else fps * 0.9 + inst_fps * 0.1
+                last_tick = now
 
                 if r.boxes is not None and r.boxes.id is not None:
                     boxes = r.boxes.xyxy.cpu().numpy()
@@ -97,7 +104,7 @@ class VideoWorker(QThread):
                 # duration tracks elapsed itself (no fixed end for a live session) so the
                 # dashboard's time readout and progress bar read as "session running time".
                 presentation.duration = elapsed
-                canvas = presentation.render(frame, in_count, out_count, events, elapsed, active)
+                canvas = presentation.render(frame, in_count, out_count, events, elapsed, active, fps=fps)
                 rgb = canvas[:, :, ::-1].copy()
                 h, w, ch = rgb.shape
                 qimg = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888).copy()

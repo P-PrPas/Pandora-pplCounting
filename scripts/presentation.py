@@ -148,7 +148,7 @@ class Presentation:
         text(f, 'PROOF OF CONCEPT', 40, 1231, 14, MUTED, True)
         text(f, footer, 2000, 1232, 16, MUTED)
 
-    def render(self, frame, in_count, out_count, events, elapsed, active):
+    def render(self, frame, in_count, out_count, events, elapsed, active, fps=None):
         canvas = self.base.copy()
         canvas[40:1120, 40:1960] = cv2.resize(frame, (1920,1080)) if frame.shape[:2] != (1080,1920) else frame
         text(canvas, f'{in_count:02d}', 2023, 198, 76, MINT, True)
@@ -165,7 +165,11 @@ class Presentation:
             text(canvas, clock(seconds), 2028, y+5, 22, WHITE)
             text(canvas, f'{tid:03d}', 2150, y+5, 22, MUTED)
             text(canvas, '↗  IN' if direction == 'in' else '↙  OUT', 2310, y+5, 22, color, True)
-        text(canvas, f'{active:02d} active tracks in frame', 2028, 1084, 18, MUTED)
+        # fps=None for batch export (fixed clip framerate, not worth showing); live app passes it.
+        label = f'{active:02d} active tracks in frame'
+        if fps is not None:
+            label += f'   ·   {fps:.1f} FPS'
+        text(canvas, label, 2028, 1084, 18, MUTED)
         text(canvas, f'{clock(elapsed)}  /  {clock(self.duration)}', 1700, 1160, 22, WHITE)
         cv2.line(canvas, (40, 1208), (2520, 1208), LINE, 3)
         progress = min(1, max(0, elapsed/self.duration)) if self.duration > 0 else 0

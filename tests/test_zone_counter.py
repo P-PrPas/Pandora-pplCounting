@@ -1,8 +1,10 @@
 """Self-check for the ZoneCounter debounce/state-machine logic (no video/model needed)."""
+import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
+from counting import best_device
 from people_counter import ZoneCounter
 
 
@@ -35,6 +37,14 @@ def demo():
     assert c3.update(3, None) is None
     assert c3.update(3, "B") is None
     assert c3.update(3, "B") is None  # baseline set to B, no prior zone -> no event
+
+    # best_device(): env override always wins, and the result must be a real usable
+    # device, not just one that reports "available" (torch.cuda.is_available() can lie
+    # on a GPU the installed torch build has no kernels for — see counting.py).
+    os.environ["DEVICE"] = "cpu"
+    assert best_device() == "cpu"
+    del os.environ["DEVICE"]
+    assert best_device() in ("cuda", "mps", "cpu")
 
     print("all zone-counter self-checks passed")
 

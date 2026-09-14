@@ -12,7 +12,7 @@ from PySide6.QtGui import QImage
 from ultralytics import YOLO
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-from counting import ZoneCounter, classify_point
+from counting import ZoneCounter, best_device, classify_point
 from presentation import Presentation, draw_track, draw_zones
 
 SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
@@ -56,10 +56,13 @@ class VideoWorker(QThread):
             presentation = Presentation(0, label_a="EXIT", label_b="ENTER",
                                          footer="Live RTSP feed · AI-assisted counting")
 
-            # ponytail: same call shape as scripts/people_counter.py (device="cpu" for the
-            # same torch/GPU-kernel mismatch; conf=0.1 for the same occlusion mitigation).
+            # ponytail: same call shape as scripts/people_counter.py. Device auto-picked
+            # (cuda > mps > cpu) — same weights/precision either way, so this is a free
+            # speedup, not an accuracy tradeoff. conf=0.1 for the same occlusion mitigation.
+            device = best_device()
+            print(f"video_worker: running inference on device={device}")
             results = model.track(self.source, classes=[0], conf=0.1, tracker=str(TRACKER_CONFIG),
-                                   stream=True, verbose=False, device="cpu")
+                                   stream=True, verbose=False, device=device)
             for frame_idx, r in enumerate(results):
                 if self._stop:
                     break

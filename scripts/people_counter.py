@@ -20,7 +20,7 @@ import numpy as np
 from ultralytics import YOLO
 
 from presentation import Presentation, draw_track, draw_zones
-from counting import ZoneCounter, classify_point  # noqa: F401 (ZoneCounter re-exported for tests)
+from counting import ZoneCounter, best_device, classify_point  # noqa: F401 (ZoneCounter re-exported for tests)
 
 HERE = Path(__file__).parent
 MODEL_PATH = HERE / "yolo11s.pt"
@@ -61,15 +61,18 @@ def main():
     events = []
     in_count = out_count = 0
 
-    # ponytail: device="cpu" forced — installed torch build has no kernels for this V100;
-    # switch to default (GPU) once torch is reinstalled against a matching CUDA build.
+    # ponytail: device auto-picked (cuda > mps > cpu) — same weights/precision on any
+    # backend, so this is a free speedup, not an accuracy tradeoff. Override with the
+    # DEVICE env var if a given machine's backend hits an unimplemented op.
     # conf=0.1 (not 0.25) so partially-blocked people still get a low-score detection
     # that ByteTrack's second-stage matching can use — the whole point of its two-stage
     # design, wasted if we filter those boxes out before they reach it. Paired with
     # bytetrack_custom.yaml's longer track_buffer, this is the fix for boxes getting
     # lost when the doorway is crowded and people fully block each other.
+    device = best_device()
+    print(f"people_counter: running inference on device={device}")
     results = model.track(src, classes=[0], conf=0.1, tracker=str(TRACKER_CONFIG),
-                           stream=True, verbose=False, device="cpu")
+                           stream=True, verbose=False, device=device)
     for frame_idx, r in enumerate(results):
         frame = r.orig_img
         occupied = []

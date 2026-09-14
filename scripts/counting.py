@@ -1,9 +1,36 @@
 """Source-agnostic counting core: shared by the batch CLI (scripts/people_counter.py)
 and the live desktop app (app/), so both run the exact same algorithm.
 """
+import os
+
 import cv2
+import torch
 
 DEBOUNCE_FRAMES = 4  # consecutive frames required in a zone before a state change is confirmed
+
+
+def best_device():
+    """Fastest available inference device, same weights/precision either way — no
+    accuracy tradeoff, just hardware acceleration. Honors a DEVICE env override
+    (e.g. force "cpu" if a backend hits an unimplemented op on a given machine).
+
+    torch.cuda.is_available() can lie: it returns True even when the installed
+    torch build has no compiled kernels for the GPU's compute capability (seen on
+    this dev box's V100 + a CUDA 13 wheel) — actually running an op is the only
+    reliable check, so probe with a throwaway op before trusting either backend.
+    """
+    if os.environ.get("DEVICE"):
+        return os.environ["DEVICE"]
+    checks = [("cuda", torch.cuda.is_available), ("mps", torch.backends.mps.is_available)]
+    for device, is_available in checks:
+        if not is_available():
+            continue
+        try:
+            (torch.zeros(1, device=device) + 1).item()
+            return device
+        except RuntimeError:
+            pass  # e.g. no kernel image for this GPU's compute capability — fall through
+    return "cpu"
 
 
 def classify_point(pt, zone_a, zone_b):

@@ -53,11 +53,12 @@ def draw_user_zone_outline(frame, polygon, label, occupied=None):
 
 
 def calibrate(src, device):
-    """Pass 1: collect real foot->neck offsets from this clip's own poses,
-    split by which foot-level zone the foot landed in.
+    """Pass 1: collect (foot_position, foot->neck offset) pairs from every
+    confident pose detection in the clip - used to interpolate a
+    per-vertex offset for each zone (see head_level_zones).
     """
     model = YOLO(MODEL_PATH)
-    samples_a, samples_b = [], []
+    positions, offsets = [], []
     results = model(src, classes=[0], conf=0.1, stream=True, verbose=False,
                      device=device, vid_stride=CALIBRATION_STRIDE)
     for r in results:
@@ -71,13 +72,10 @@ def calibrate(src, device):
             neck = neck_point(kp)
             if neck is None:
                 continue
-            offset = (neck[0] - foot[0], neck[1] - foot[1])
-            zone = classify_point(foot, ZONE_A_FOOT, ZONE_B_FOOT)
-            if zone == "A":
-                samples_a.append(offset)
-            elif zone == "B":
-                samples_b.append(offset)
-    return head_level_zones(ZONE_A_FOOT, ZONE_B_FOOT, samples_a, samples_b)
+            positions.append(foot)
+            offsets.append((neck[0] - foot[0], neck[1] - foot[1]))
+    print(f"  {len(positions)} calibration samples collected")
+    return head_level_zones(ZONE_A_FOOT, ZONE_B_FOOT, positions, offsets)
 
 
 def main():
@@ -100,8 +98,8 @@ def main():
 
     print("people_counter_v2: pass 1/2 - calibrating head-level zones from this clip's own poses...")
     zone_a_head, zone_b_head = calibrate(src, device)
-    print(f"  zone A (outside) shifted by {tuple((zone_a_head - ZONE_A_FOOT).mean(axis=0).round(1))} px")
-    print(f"  zone B (inside)  shifted by {tuple((zone_b_head - ZONE_B_FOOT).mean(axis=0).round(1))} px")
+    print(f"  zone A (outside) vertices shifted by avg {(zone_a_head - ZONE_A_FOOT).mean(axis=0).round(1)} px")
+    print(f"  zone B (inside)  vertices shifted by avg {(zone_b_head - ZONE_B_FOOT).mean(axis=0).round(1)} px")
 
     presentation = Presentation(duration, footer='Recorded footage · AI-assisted counting (head-tracked, v2)')
     writer = cv2.VideoWriter(f"{out_prefix}.mp4", cv2.VideoWriter_fourcc(*"mp4v"), fps, presentation.size)

@@ -16,18 +16,25 @@ def demo():
     kpts[6, 2] = 0.1  # right shoulder not confidently visible
     assert neck_point(kpts) is None
 
-    # head_level_zones: uniform per-zone shift by the average observed offset
-    zone_a = np.array([[0, 100], [50, 100], [50, 150], [0, 150]])
-    zone_b = np.array([[100, 100], [150, 100], [150, 150], [100, 150]])
-    samples_a = [(2, -40), (-2, -60), (0, -50)]    # mean (0, -50)
-    samples_b = [(10, -30), (10, -30), (10, -30)]  # mean (10, -30)
-    head_a, head_b = head_level_zones(zone_a, zone_b, samples_a, samples_b)
-    assert np.array_equal(head_a, zone_a + np.array([0, -50]))
-    assert np.array_equal(head_b, zone_b + np.array([10, -30]))
+    # head_level_zones: per-vertex IDW offset, not one shift for the whole zone -
+    # a vertex near a cluster of samples should land close to that cluster's offset.
+    positions = [(0, 500), (10, 500), (0, 510), (500, 500), (510, 500), (500, 510)]
+    offsets = [(0, -30), (0, -30), (0, -30), (10, -70), (10, -70), (10, -70)]
+    zone_a = np.array([[0, 500], [50, 500], [50, 550], [0, 550]])       # near the first cluster
+    zone_b = np.array([[500, 500], [550, 500], [550, 550], [500, 550]])  # near the second cluster
+    head_a, head_b = head_level_zones(zone_a, zone_b, positions, offsets, k=3)
+    assert np.allclose(head_a - zone_a, [0, -30], atol=1)
+    assert np.allclose(head_b - zone_b, [10, -70], atol=1)
 
-    # fallback: a zone with too few samples borrows the combined average of both
-    head_a2, _ = head_level_zones(zone_a, zone_b, [], samples_b)
-    assert np.array_equal(head_a2, zone_a + np.array([10, -30]))
+    # The bug this replaced: averaging each zone into one shift pulled two
+    # zones that share a boundary apart (different zones, different shifts).
+    # Per-vertex IDW is a pure function of position, so a vertex shared by
+    # two adjacent ("flush") zones must map to the exact same point either way.
+    shared_vertex = (50, 500)
+    zone_a2 = np.array([[0, 500], shared_vertex, [50, 550], [0, 550]])
+    zone_b2 = np.array([shared_vertex, [500, 500], [500, 550], [50, 550]])
+    head_a2, head_b2 = head_level_zones(zone_a2, zone_b2, positions, offsets, k=3)
+    assert tuple(head_a2[1]) == tuple(head_b2[0]), "shared vertex must map identically for both zones"
 
     # fallback: no samples anywhere -> zero shift (head zone == foot zone), never crashes
     head_a3, head_b3 = head_level_zones(zone_a, zone_b, [], [])

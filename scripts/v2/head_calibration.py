@@ -8,10 +8,54 @@ measure the real foot->neck offset from this video's own pose detections and
 interpolate it at each zone vertex from the nearest real observations.
 """
 import numpy as np
+from ultralytics import YOLO
 
 # Standard COCO-pose keypoint order (all YOLO*-pose weights use this).
 LEFT_SHOULDER, RIGHT_SHOULDER = 5, 6
 KPT_CONF_MIN = 0.5  # ponytail: fixed threshold; expose as a param if a camera needs tuning
+
+
+def collect_pose_samples(source, model_path, device, stride=1, max_frames=None,
+                          on_frame=None, should_stop=None):
+    """Run a YOLO-pose model over `source`, returning parallel lists of every
+    confident detection's (foot_position, foot->neck offset).
+
+    `max_frames` stops early after that many *processed* frames (i.e. after
+    `stride`-many source frames each) - a finished clip ends on its own, but a
+    live/RTSP source doesn't, so callers sampling a live stream for
+    calibration need a way to say "that's enough".
+
+    `on_frame(frame_index, sample_count)`, if given, is called after every
+    processed frame - lets a caller show live progress. `should_stop()`, if
+    given, is checked every frame and breaks the loop when truthy - lets a
+    caller cancel a live calibration in progress.
+    """
+    model = YOLO(model_path)
+    positions, offsets = [], []
+    results = model(source, classes=[0], conf=0.1, stream=True, verbose=False,
+                     device=device, vid_stride=stride)
+    for i, r in enumerate(results):
+        if max_frames is not None and i >= max_frames:
+            break
+        if should_stop is not None and should_stop():
+            break
+        if r.boxes is None or r.keypoints is None:
+            if on_frame:
+                on_frame(i, len(positions))
+            continue
+        boxes = r.boxes.xyxy.cpu().numpy()
+        kpts = r.keypoints.data.cpu().numpy()
+        for box, kp in zip(boxes, kpts):
+            neck = neck_point(kp)
+            if neck is None:
+                continue
+            x1, y1, x2, y2 = box
+            foot = ((x1 + x2) / 2, y2)
+            positions.append(foot)
+            offsets.append((neck[0] - foot[0], neck[1] - foot[1]))
+        if on_frame:
+            on_frame(i, len(positions))
+    return positions, offsets
 
 
 def neck_point(keypoints):

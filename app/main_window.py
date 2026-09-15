@@ -5,13 +5,17 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
-    QStackedWidget, QVBoxLayout, QWidget,
+    QButtonGroup, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
+    QRadioButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "v1"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "v2"))
 from presentation import AMBER, BG, LINE, MINT, MUTED, PANEL, WHITE
+from head_calibration import head_level_zones
 
+import calibration_store
+from calibration_worker import CalibrationWorker
 from video_worker import VideoWorker
 from zone_canvas import ZoneCanvas
 
@@ -45,6 +49,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.source = source
         self.worker = None
+        self.calibration_worker = None
+        self.calib_positions, self.calib_offsets = calibration_store.load(source)
         self.setWindowTitle("Doorway People Counter — Live POC")
         self.resize(1400, 860)
         self.setStyleSheet(STYLE)
@@ -96,6 +102,27 @@ class MainWindow(QMainWindow):
         self.video_label.setMinimumSize(1280, 640)
         self.video_label.setStyleSheet(f"background:{_hex(BG)}; border:1px solid {_hex(LINE)}; border-radius:10px;")
         rlay.addWidget(self.video_label, 1)
+
+        preset_row = QHBoxLayout()
+        preset_row.addWidget(QLabel("Logic:"))
+        self.v1_radio = QRadioButton("V1 · Foot tracking")
+        self.v2_radio = QRadioButton("V2 · Head tracking")
+        self.logic_group = QButtonGroup(self)
+        self.logic_group.addButton(self.v1_radio)
+        self.logic_group.addButton(self.v2_radio)
+        self.calibrate_btn = QPushButton("Calibrate (required for V2)")
+        self.calib_status = QLabel("Not calibrated")
+        self.calib_status.setObjectName("subtitle")
+        self.v1_radio.toggled.connect(self._sync_v2_controls)
+        self.v2_radio.toggled.connect(self._sync_v2_controls)
+        self.calibrate_btn.clicked.connect(self._toggle_calibration)
+        preset_row.addWidget(self.v1_radio)
+        preset_row.addWidget(self.v2_radio)
+        preset_row.addWidget(self.calibrate_btn)
+        preset_row.addWidget(self.calib_status)
+        preset_row.addStretch()
+        rlay.addLayout(preset_row)
+
         btn_row = QHBoxLayout()
         self.start_btn = QPushButton("▶  Start Live Count")
         self.start_btn.setObjectName("primary")
@@ -117,6 +144,11 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(run_page)
 
         self._sync_zone_controls()
+        self.v1_radio.setChecked(True)
+        if self.calib_positions:
+            self.calibrate_btn.setText("Recalibrate")
+            self.calib_status.setText(f"Calibrated ({len(self.calib_positions)} samples)")
+        self._sync_v2_controls()
 
     def _sync_zone_controls(self):
         self.finish_btn.setEnabled(self.canvas.can_finish_current)
@@ -132,14 +164,68 @@ class MainWindow(QMainWindow):
         self.canvas.reset()
         self.stack.setCurrentIndex(0)
 
+    def _sync_v2_controls(self):
+        is_v2 = self.v2_radio.isChecked()
+        self.calibrate_btn.setVisible(is_v2)
+        self.calib_status.setVisible(is_v2)
+        if self.worker is None and self.calibration_worker is None:
+            self.start_btn.setEnabled(not is_v2 or bool(self.calib_positions))
+
+    def _toggle_calibration(self):
+        if self.calibration_worker:
+            self.calibration_worker.stop()
+            return
+        self.calibration_worker = CalibrationWorker(self.source)
+        self.calibration_worker.progress.connect(self._on_calibration_progress)
+        self.calibration_worker.finished_ok.connect(self._on_calibration_done)
+        self.calibration_worker.error.connect(self._on_calibration_error)
+        self.calibration_worker.start()
+        self.calibrate_btn.setText("Cancel calibrating…")
+        self.start_btn.setEnabled(False)
+        self.v1_radio.setEnabled(False)
+        self.v2_radio.setEnabled(False)
+        self.calib_status.setText("Calibrating… 0 samples so far")
+
+    def _on_calibration_progress(self, n):
+        self.calib_status.setText(f"Calibrating… {n} samples so far")
+
+    def _on_calibration_done(self, positions, offsets):
+        if not positions:
+            self._finish_calibration("Not calibrated (no samples collected)")
+            return
+        self.calib_positions, self.calib_offsets = positions, offsets
+        calibration_store.save(self.source, positions, offsets)
+        self._finish_calibration(f"Calibrated ({len(positions)} samples)")
+
+    def _on_calibration_error(self, message):
+        self._finish_calibration("Not calibrated")
+        QMessageBox.critical(self, "Calibration failed", f"Live calibration stopped:\n{message}")
+
+    def _finish_calibration(self, status_text):
+        self.calibration_worker = None
+        self.calibrate_btn.setText("Recalibrate" if self.calib_positions else "Calibrate (required for V2)")
+        self.v1_radio.setEnabled(True)
+        self.v2_radio.setEnabled(True)
+        self.calib_status.setText(status_text)
+        self._sync_v2_controls()
+
     def _start(self):
-        self.worker = VideoWorker(self.source, self.canvas.enter_points, self.canvas.exit_points)
+        kwargs = {}
+        if self.v2_radio.isChecked():
+            zone_a_head, zone_b_head = head_level_zones(
+                self.canvas.exit_points, self.canvas.enter_points,
+                self.calib_positions, self.calib_offsets)
+            kwargs = dict(logic="v2", exit_zone_head=zone_a_head, enter_zone_head=zone_b_head)
+        self.worker = VideoWorker(self.source, self.canvas.enter_points, self.canvas.exit_points, **kwargs)
         self.worker.frame_ready.connect(self._on_frame)
         self.worker.error.connect(self._on_error)
         self.worker.finished_clean.connect(self._on_finished)
         self.worker.start()
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
+        self.v1_radio.setEnabled(False)
+        self.v2_radio.setEnabled(False)
+        self.calibrate_btn.setEnabled(False)
         self.status.setText("Running…")
 
     def _stop(self):
@@ -149,7 +235,11 @@ class MainWindow(QMainWindow):
             self.worker = None
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        self.v1_radio.setEnabled(True)
+        self.v2_radio.setEnabled(True)
+        self.calibrate_btn.setEnabled(True)
         self.status.setText("Idle")
+        self._sync_v2_controls()
 
     def _on_frame(self, qimg):
         pix = QPixmap.fromImage(qimg).scaled(
@@ -164,7 +254,14 @@ class MainWindow(QMainWindow):
         self.status.setText("Stream ended")
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        self.v1_radio.setEnabled(True)
+        self.v2_radio.setEnabled(True)
+        self.calibrate_btn.setEnabled(True)
+        self._sync_v2_controls()
 
     def closeEvent(self, event):
         self._stop()
+        if self.calibration_worker:
+            self.calibration_worker.stop()
+            self.calibration_worker.wait(3000)
         super().closeEvent(event)

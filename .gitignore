@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .env
 app/zones.json
+app/calibration_samples.json
 scripts/v2/zones_head*.json
 .claude/
 

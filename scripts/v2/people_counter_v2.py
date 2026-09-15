@@ -33,10 +33,10 @@ from ultralytics import YOLO
 V1_DIR = Path(__file__).parent.parent / "v1"
 sys.path.insert(0, str(V1_DIR))
 sys.path.insert(0, str(Path(__file__).parent))
-from presentation import Presentation, WHITE, chip, draw_track, draw_zones  # noqa: E402
-from counting import ZoneCounter, best_device, classify_point              # noqa: E402
-from people_counter import ZONE_A as ZONE_A_FOOT, ZONE_B as ZONE_B_FOOT    # noqa: E402
-from head_calibration import neck_point                                    # noqa: E402
+from presentation import Presentation                                   # noqa: E402
+from counting import ZoneCounter, best_device                           # noqa: E402
+from people_counter import ZONE_A as ZONE_A_FOOT, ZONE_B as ZONE_B_FOOT  # noqa: E402
+from head_tracker import render_v2_frame                                # noqa: E402
 
 HERE = Path(__file__).parent
 MODEL_PATH = HERE / "yolo11s-pose.pt"
@@ -44,15 +44,6 @@ TRACKER_CONFIG = V1_DIR / "bytetrack_custom.yaml"
 
 TRAIL_LEN = 30
 HIGHLIGHT_FRAMES = 20
-
-
-def draw_user_zone_outline(frame, polygon, label, occupied=None):
-    """Thin, unfilled outline for the user-drawn (foot-level) reference zone,
-    kept visually distinct from the filled head-level zone actually used.
-    """
-    cv2.polylines(frame, [polygon], True, WHITE, 1, cv2.LINE_AA)
-    x, y = polygon[np.argmin(polygon[:, 1])]
-    chip(frame, label, int(x), int(y) - 40, WHITE, occupied)
 
 
 def load_head_zones(path):
@@ -100,42 +91,13 @@ def main():
     results = model.track(src, classes=[0], conf=0.1, tracker=str(TRACKER_CONFIG),
                            stream=True, verbose=False, device=device)
     for frame_idx, r in enumerate(results):
-        frame = r.orig_img
-        occupied = []
-        draw_zones(frame, zone_a_head, zone_b_head, occupied,
-                   label_a='A / OUTSIDE (head, active)', label_b='B / INSIDE (head, active)')
-        draw_user_zone_outline(frame, ZONE_A_FOOT, 'A · foot (user-drawn)', occupied)
-        draw_user_zone_outline(frame, ZONE_B_FOOT, 'B · foot (user-drawn)', occupied)
-        active = 0
-
-        if r.boxes is not None and r.boxes.id is not None and r.keypoints is not None:
-            boxes = r.boxes.xyxy.cpu().numpy()
-            ids = r.boxes.id.cpu().numpy().astype(int)
-            kpts = r.keypoints.data.cpu().numpy()
-            active = len(ids)
-            for box, tid, kp in zip(boxes, ids, kpts):
-                x1, y1, x2, y2 = box
-                foot_raw = (int((x1 + x2) / 2), int(y2))
-                neck = neck_point(kp)
-                # ponytail: shoulders not confidently visible this frame (occlusion,
-                # side-on pose) -> classify as no zone, same as v1's off-polygon case.
-                # Simpler than falling back to the foot point, and never miscounts.
-                zone = classify_point(neck, zone_a_head, zone_b_head) if neck else None
-                event = counter.update(tid, zone)
-                if event:
-                    in_count += event == "in"
-                    out_count += event == "out"
-                    events.append((round(frame_idx / fps, 2), frame_idx, tid, event))
-                    recent_events[tid] = (event, frame_idx)
-
-                if neck is not None:
-                    point = (int(neck[0]), int(neck[1]))
-                    trails[tid].append(point)
-                    last = recent_events.get(tid)
-                    highlighted = bool(last) and frame_idx - last[1] < HIGHLIGHT_FRAMES
-                    draw_track(frame, box, tid, point, trails[tid], highlighted,
-                               last[0] if last else None, occupied)
-                    cv2.circle(frame, foot_raw, 3, WHITE, -1, cv2.LINE_AA)  # v1's tracked point, for comparison
+        frame, active, fired = render_v2_frame(
+            r, frame_idx, zone_a_head, zone_b_head, ZONE_A_FOOT, ZONE_B_FOOT,
+            counter, trails, recent_events, HIGHLIGHT_FRAMES, mark_foot=True)
+        for tid, event in fired:
+            in_count += event == "in"
+            out_count += event == "out"
+            events.append((round(frame_idx / fps, 2), frame_idx, tid, event))
 
         writer.write(presentation.render(frame, in_count, out_count, events,
                                          (frame_idx + 1) / fps, active))

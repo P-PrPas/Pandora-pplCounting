@@ -62,3 +62,11 @@ python3 app/main.py
 Draw the Enter zone (click points, "Finish zone"), then the Exit zone, then
 "Continue" and "Start Live Count". Zones are cached to `app/zones.json` per
 RTSP source so a relaunch against the same camera skips redrawing.
+
+On the run page, pick a **Logic** preset — V1 (foot tracking) or V2 (head
+tracking) — before starting. V2 needs a one-time-per-camera calibration:
+click "Calibrate" and let it sample ~20-30s of the live stream (people
+actually walking through frame), then "Start Live Count" unlocks. Calibration
+samples are cached to `app/calibration_samples.json` per RTSP source, so
+redrawing zones or relaunching against the same camera doesn't require
+recalibrating — only a new camera or an explicit "Recalibrate" does.

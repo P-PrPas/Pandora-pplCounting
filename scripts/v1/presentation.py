@@ -86,6 +86,16 @@ def draw_zones(frame, outside, inside, occupied=None, label_a='A / OUTSIDE', lab
         chip(frame, label, int(x)+24, int(y)-16, color, occupied)
 
 
+def draw_user_zone_outline(frame, polygon, label, occupied=None):
+    """Thin, unfilled outline for a user-drawn reference zone (v2's foot-level
+    input), kept visually distinct from the filled zone actually used for
+    classification (drawn by draw_zones).
+    """
+    cv2.polylines(frame, [polygon], True, WHITE, 1, cv2.LINE_AA)
+    x, y = polygon[np.argmin(polygon[:, 1])]
+    chip(frame, label, int(x), int(y) - 40, WHITE, occupied)
+
+
 def draw_track(frame, box, tid, foot, trail, highlighted, event_label, occupied=None):
     x1, y1, x2, y2 = (int(v) for v in box)
     color = (MINT if event_label == 'in' else AMBER) if highlighted else TRACK

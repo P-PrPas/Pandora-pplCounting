@@ -24,32 +24,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "v1"))
 sys.path.insert(0, str(Path(__file__).parent))
 from counting import best_device                                        # noqa: E402
 from people_counter import ZONE_A as ZONE_A_FOOT, ZONE_B as ZONE_B_FOOT  # noqa: E402
-from head_calibration import head_level_zones, neck_point                # noqa: E402
-from ultralytics import YOLO
+from head_calibration import collect_pose_samples, head_level_zones      # noqa: E402
 
 HERE = Path(__file__).parent
 MODEL_PATH = HERE / "yolo11s-pose.pt"
 CALIBRATION_STRIDE = 3  # ponytail: one-off statistical pass, subsampling doesn't hurt it
-
-
-def collect_samples(src, device):
-    model = YOLO(MODEL_PATH)
-    positions, offsets = [], []
-    results = model(src, classes=[0], conf=0.1, stream=True, verbose=False,
-                     device=device, vid_stride=CALIBRATION_STRIDE)
-    for r in results:
-        if r.boxes is None or r.keypoints is None:
-            continue
-        boxes = r.boxes.xyxy.cpu().numpy()
-        kpts = r.keypoints.data.cpu().numpy()
-        for box, kp in zip(boxes, kpts):
-            neck = neck_point(kp)
-            if neck is None:
-                continue
-            x1, y1, x2, y2 = box
-            positions.append(((x1 + x2) / 2, y2))
-            offsets.append((neck[0] - positions[-1][0], neck[1] - positions[-1][1]))
-    return positions, offsets
 
 
 def main():
@@ -62,7 +41,7 @@ def main():
     positions, offsets = [], []
     for clip in clips:
         print(f"calibrate_zones: sampling {clip} (device={device})...")
-        p, o = collect_samples(clip, device)
+        p, o = collect_pose_samples(clip, MODEL_PATH, device, stride=CALIBRATION_STRIDE)
         print(f"  {len(p)} samples")
         positions += p
         offsets += o

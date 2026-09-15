@@ -5,17 +5,24 @@ YOLO-pose model's neck point rather than the bbox-bottom foot point — the
 idea being it's less sensitive to stride/pose than the foot.
 
 The zone polygons are still drawn by the user at foot level (same numbers as
-v1's ZONE_A/ZONE_B — same physical camera, same doorway). Pass 1 measures
-this clip's own real foot->neck offset per zone and shifts the polygons up
-to head level for pass 2's actual classification. The output video draws
-both: the user's foot-level polygons (thin white outline) and the calibrated
-head-level polygons actually used for counting (filled, as in v1).
+v1's ZONE_A/ZONE_B — same physical camera, same doorway). The head-level
+polygons actually used for classification come from a *pre-computed*
+calibration file (see calibrate_zones.py) rather than being derived from
+this run's own footage — the offset is a property of the fixed camera, not
+of whatever clip/stream happens to be running, and a live RTSP feed has no
+"whole clip" to pre-scan the way a batch calibration pass would need. Run
+calibrate_zones.py once per camera (or whenever it moves) to produce that
+file. The output video draws both: the user's foot-level polygons (thin
+white outline) and the calibrated head-level polygons actually used for
+counting (filled, as in v1).
 
 Usage (from repo root):
-    python3 scripts/v2/people_counter_v2.py <input_video> <output_prefix>
+    python3 scripts/v2/calibrate_zones.py <calibration.json> <ref_clip> [more_clips...]
+    python3 scripts/v2/people_counter_v2.py <calibration.json> <input_video> <output_prefix>
 """
 import sys
 import csv
+import json
 from collections import defaultdict, deque
 from pathlib import Path
 
@@ -29,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from presentation import Presentation, WHITE, chip, draw_track, draw_zones  # noqa: E402
 from counting import ZoneCounter, best_device, classify_point              # noqa: E402
 from people_counter import ZONE_A as ZONE_A_FOOT, ZONE_B as ZONE_B_FOOT    # noqa: E402
-from head_calibration import head_level_zones, neck_point                  # noqa: E402
+from head_calibration import neck_point                                    # noqa: E402
 
 HERE = Path(__file__).parent
 MODEL_PATH = HERE / "yolo11s-pose.pt"
@@ -37,10 +44,6 @@ TRACKER_CONFIG = V1_DIR / "bytetrack_custom.yaml"
 
 TRAIL_LEN = 30
 HIGHLIGHT_FRAMES = 20
-# ponytail: calibration is a one-off statistical average, not part of the
-# actual counting inference — skipping frames here doesn't touch counting
-# accuracy (pass 2 below still runs every frame at full res).
-CALIBRATION_STRIDE = 3
 
 
 def draw_user_zone_outline(frame, polygon, label, occupied=None):
@@ -52,37 +55,17 @@ def draw_user_zone_outline(frame, polygon, label, occupied=None):
     chip(frame, label, int(x), int(y) - 40, WHITE, occupied)
 
 
-def calibrate(src, device):
-    """Pass 1: collect (foot_position, foot->neck offset) pairs from every
-    confident pose detection in the clip - used to interpolate a
-    per-vertex offset for each zone (see head_level_zones).
-    """
-    model = YOLO(MODEL_PATH)
-    positions, offsets = [], []
-    results = model(src, classes=[0], conf=0.1, stream=True, verbose=False,
-                     device=device, vid_stride=CALIBRATION_STRIDE)
-    for r in results:
-        if r.boxes is None or r.keypoints is None:
-            continue
-        boxes = r.boxes.xyxy.cpu().numpy()
-        kpts = r.keypoints.data.cpu().numpy()
-        for box, kp in zip(boxes, kpts):
-            x1, y1, x2, y2 = box
-            foot = ((x1 + x2) / 2, y2)
-            neck = neck_point(kp)
-            if neck is None:
-                continue
-            positions.append(foot)
-            offsets.append((neck[0] - foot[0], neck[1] - foot[1]))
-    print(f"  {len(positions)} calibration samples collected")
-    return head_level_zones(ZONE_A_FOOT, ZONE_B_FOOT, positions, offsets)
+def load_head_zones(path):
+    data = json.loads(Path(path).read_text())
+    return (np.array(data["zone_a_head"], dtype=np.int32),
+            np.array(data["zone_b_head"], dtype=np.int32))
 
 
 def main():
-    if len(sys.argv) != 3:
-        print(f"usage: python3 {sys.argv[0]} <input_video> <output_prefix>")
+    if len(sys.argv) != 4:
+        print(f"usage: python3 {sys.argv[0]} <calibration.json> <input_video> <output_prefix>")
         sys.exit(1)
-    src, out_prefix = sys.argv[1], sys.argv[2]
+    calibration_path, src, out_prefix = sys.argv[1], sys.argv[2], sys.argv[3]
 
     cap = cv2.VideoCapture(src)
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
@@ -96,8 +79,8 @@ def main():
     device = best_device()
     print(f"people_counter_v2: running inference on device={device}")
 
-    print("people_counter_v2: pass 1/2 - calibrating head-level zones from this clip's own poses...")
-    zone_a_head, zone_b_head = calibrate(src, device)
+    zone_a_head, zone_b_head = load_head_zones(calibration_path)
+    print(f"people_counter_v2: loaded head-level zones from {calibration_path}")
     print(f"  zone A (outside) vertices shifted by avg {(zone_a_head - ZONE_A_FOOT).mean(axis=0).round(1)} px")
     print(f"  zone B (inside)  vertices shifted by avg {(zone_b_head - ZONE_B_FOOT).mean(axis=0).round(1)} px")
 
@@ -113,7 +96,7 @@ def main():
     events = []
     in_count = out_count = 0
 
-    print("people_counter_v2: pass 2/2 - tracking + counting by neck point...")
+    print("people_counter_v2: tracking + counting by neck point...")
     results = model.track(src, classes=[0], conf=0.1, tracker=str(TRACKER_CONFIG),
                            stream=True, verbose=False, device=device)
     for frame_idx, r in enumerate(results):

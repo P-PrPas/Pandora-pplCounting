@@ -14,10 +14,13 @@ annotated video with live counts.
 - `scripts/v2/` — head-tracked variant: same detection+tracking, but classifies
   by neck point (midpoint of the shoulder keypoints from a YOLO-pose model)
   instead of the foot point. The zone polygons are still drawn by the user at
-  foot level; a calibration pass measures this clip's own foot→neck offset
-  and shifts the zones to head level for the actual classification. The
-  annotated output shows both the user-drawn (foot) and calibrated (head)
-  polygons. See `scripts/v2/people_counter_v2.py`.
+  foot level; a one-time offline calibration step (`calibrate_zones.py`)
+  measures this camera's real foot→neck offset from reference footage and
+  shifts the zones to head level, caching the result to a JSON file. The
+  runtime script (`people_counter_v2.py`) just loads that file and runs a
+  single tracking pass — no whole-clip pre-scan, so it also works against a
+  live/RTSP source, not just a finished recording. The annotated output
+  shows both the user-drawn (foot) and calibrated (head) polygons.
 - `app/` — live desktop POC (PySide6). Draw the Enter/Exit zones on a camera
   snapshot, then run real-time detection/tracking/counting against an RTSP
   stream. See "Live desktop app" below.
@@ -37,7 +40,12 @@ Run everything from the repo root:
 ```bash
 python3 tests/test_zone_counter.py
 python3 tests/test_presentation.py
+python3 tests/test_v2_head_calibration.py
 python3 scripts/v1/people_counter.py data/dataset/<clip>.mp4 data/results/v1/<output_prefix>
+
+# v2 (head-tracked): calibrate once per camera, then run
+python3 scripts/v2/calibrate_zones.py scripts/v2/zones_head.json data/dataset/<clip1>.mp4 [<clip2>.mp4 ...]
+python3 scripts/v2/people_counter_v2.py scripts/v2/zones_head.json data/dataset/<clip>.mp4 data/results/v2/<output_prefix>
 ```
 
 See `docs/REPORT.md` for results and `docs/PRESENTATION.md` for render/export

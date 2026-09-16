@@ -31,8 +31,11 @@ flush instead of drifting apart.
 This model also has a domain-shift problem on this footage: it confidently
 (~0.74 conf, same as real heads - confidence thresholding can't separate it)
 hallucinates a "head" on a static wall sign/closed-door area that never
-moves. HEAD_ROI (in head_tracker_v3.py) hard-excludes that region before any
-detection reaches the tracker, at both calibration and runtime.
+moves. Rather than hardcoding a pixel region to exclude (camera-specific,
+needs re-deriving per scene), this runs v1's person detector every frame
+too and drops any head with no person box under it (head_tracker_v3.py) -
+the wall sign never gets a person box, verified empirically, so it's
+filtered out by construction. Costs a second model's inference per frame.
 
 Usage (from repo root):
     python3 scripts/v3/calibrate_zones_v3.py <calibration.json> <ref_clip> [more_clips...]
@@ -58,6 +61,7 @@ from head_tracker_v3 import render_v3_frame                             # noqa: 
 
 HERE = Path(__file__).parent
 MODEL_PATH = HERE / "head_detector.pt"  # ponytail: SCUT-HEAD nano - swap in medium.pt if accuracy needs it
+PERSON_MODEL_PATH = V1_DIR / "yolo11s.pt"  # only for the person-overlap filter, not tracked
 TRACKER_CONFIG = HERE / "bytetrack_v3.yaml"  # v1's config with match_thresh loosened for small head boxes
 
 TRAIL_LEN = 30
@@ -99,6 +103,7 @@ def main():
         raise RuntimeError(f"Cannot create video: {out_prefix}.mp4")
 
     model = YOLO(MODEL_PATH)
+    person_model = YOLO(PERSON_MODEL_PATH)  # per-frame overlap filter only, not tracked
     counter = ZoneCounter()
     trails = defaultdict(lambda: deque(maxlen=TRAIL_LEN))
     recent_events = {}
@@ -112,9 +117,11 @@ def main():
     results = model.track(src, conf=0.1, tracker=str(TRACKER_CONFIG),
                            stream=True, verbose=False, device=device)
     for frame_idx, r in enumerate(results):
+        pr = person_model.predict(r.orig_img, classes=[0], conf=0.1, verbose=False, device=device)[0]
+        person_boxes = pr.boxes.xyxy.cpu().numpy() if pr.boxes is not None else np.zeros((0, 4))
         frame, active, fired = render_v3_frame(
             r, frame_idx, zone_a_head, zone_b_head, ZONE_A_FOOT, ZONE_B_FOOT,
-            counter, trails, recent_events, HIGHLIGHT_FRAMES)
+            counter, trails, recent_events, HIGHLIGHT_FRAMES, person_boxes)
         for tid, event in fired:
             in_count += event == "in"
             out_count += event == "out"

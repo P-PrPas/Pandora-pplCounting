@@ -32,9 +32,12 @@ annotated video with live counts.
   (`head_calibration_v3.py`), since a plain head detector never observes a
   foot and a head together in one detection the way a pose model does.
   Reuses v2's per-vertex IDW interpolation unchanged — same fix that keeps
-  adjacent zones from overlapping after the shift. Also carries a `HEAD_ROI`
-  that excludes a known false-positive hotspot (a static wall sign this
-  model confidently misreads as a head — see `head_tracker_v3.py`).
+  adjacent zones from overlapping after the shift. Also runs v1's person
+  detector every frame at runtime as a filter: a detected "head" only counts
+  if a person box sits under it, which is what actually excludes a known
+  false-positive hotspot (a static wall sign this model confidently misreads
+  as a head) instead of a hardcoded per-camera pixel region — see
+  `head_tracker_v3.py`.
 - `app/` — live desktop POC (PySide6). Draw the Enter/Exit zones on a camera
   snapshot, then run real-time detection/tracking/counting against an RTSP
   stream. See "Live desktop app" below.

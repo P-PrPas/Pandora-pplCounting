@@ -1,0 +1,12 @@
+# ponytail: v1's bytetrack_custom.yaml, but match_thresh loosened further -
+# head boxes are ~20-40px vs person boxes' ~100-300px, so the same pixel
+# displacement between frames costs far more relative IoU. Revert to
+# scripts/v1/bytetrack_custom.yaml if a future model gives bigger boxes.
+
+tracker_type: bytetrack
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.25
+track_buffer: 60
+match_thresh: 0.95
+fuse_score: True

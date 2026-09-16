@@ -25,11 +25,16 @@ annotated video with live counts.
   point from a foot detection (v1) or a pose model's neck point (v2), this
   runs a dedicated head detector (`head_detector.pt`, a pretrained YOLOv8n
   checkpoint trained on SCUT-HEAD by a third party — no training done here)
-  and tracks its boxes directly. Since the detector's boxes are already at
-  head level there's no foot→head calibration step; `ZONE_A`/`ZONE_B` are
-  hand-placed at head height like v1's foot-level zones, plus a `HEAD_ROI`
+  and tracks its boxes directly. Same "draw zones at foot level, calibrate
+  once, run against head-level zones" split as v2 (`calibrate_zones_v3.py` /
+  `people_counter_v3.py`), except the foot→head offset is measured by
+  pairing v1's person detector with this head detector on the same frames
+  (`head_calibration_v3.py`), since a plain head detector never observes a
+  foot and a head together in one detection the way a pose model does.
+  Reuses v2's per-vertex IDW interpolation unchanged — same fix that keeps
+  adjacent zones from overlapping after the shift. Also carries a `HEAD_ROI`
   that excludes a known false-positive hotspot (a static wall sign this
-  model confidently misreads as a head — see the script's docstring).
+  model confidently misreads as a head — see `head_tracker_v3.py`).
 - `app/` — live desktop POC (PySide6). Draw the Enter/Exit zones on a camera
   snapshot, then run real-time detection/tracking/counting against an RTSP
   stream. See "Live desktop app" below.
@@ -56,8 +61,9 @@ python3 scripts/v1/people_counter.py data/dataset/<clip>.mp4 data/results/v1/<ou
 python3 scripts/v2/calibrate_zones.py scripts/v2/zones_head.json data/dataset/<clip1>.mp4 [<clip2>.mp4 ...]
 python3 scripts/v2/people_counter_v2.py scripts/v2/zones_head.json data/dataset/<clip>.mp4 data/results/v2/<output_prefix>
 
-# v3 (head-detected): no calibration step needed
-python3 scripts/v3/people_counter_v3.py data/dataset/<clip>.mp4 data/results/v3/<output_prefix>
+# v3 (head-detected): calibrate once per camera, then run
+python3 scripts/v3/calibrate_zones_v3.py scripts/v3/zones_head_v3.json data/dataset/<clip1>.mp4 [<clip2>.mp4 ...]
+python3 scripts/v3/people_counter_v3.py scripts/v3/zones_head_v3.json data/dataset/<clip>.mp4 data/results/v3/<output_prefix>
 ```
 
 See `docs/REPORT.md` for results and `docs/PRESENTATION.md` for render/export

@@ -4,6 +4,7 @@ __pycache__/
 app/zones.json
 app/calibration_samples.json
 scripts/v2/zones_head*.json
+scripts/v3/zones_head*.json
 .claude/
 
 # Generated clips/outputs — reproduce via scripts/people_counter.py or app/main.py.

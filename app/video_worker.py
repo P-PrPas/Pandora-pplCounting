@@ -13,14 +13,18 @@ from ultralytics import YOLO
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "v1"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "v2"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "v3"))
 from counting import ZoneCounter, best_device, classify_point
 from presentation import Presentation, draw_track, draw_zones
 from head_tracker import render_v2_frame
+from head_tracker_v3 import render_v3_frame
 
 SCRIPTS_DIR = Path(__file__).parent.parent / "scripts" / "v1"
 MODEL_PATH_V1 = SCRIPTS_DIR / "yolo11s.pt"
 MODEL_PATH_V2 = Path(__file__).parent.parent / "scripts" / "v2" / "yolo11s-pose.pt"
+MODEL_PATH_V3 = Path(__file__).parent.parent / "scripts" / "v3" / "head_detector.pt"
 TRACKER_CONFIG = SCRIPTS_DIR / "bytetrack_custom.yaml"
+TRACKER_CONFIG_V3 = Path(__file__).parent.parent / "scripts" / "v3" / "bytetrack_v3.yaml"
 
 TRAIL_LEN = 30
 HIGHLIGHT_FRAMES = 20
@@ -43,7 +47,7 @@ class VideoWorker(QThread):
         self.zone_a = np.array(exit_zone)
         self.zone_b = np.array(enter_zone)
         self.logic = logic
-        # v2 only: head-level zones pre-computed by MainWindow from cached
+        # v2/v3 only: head-level zones pre-computed by MainWindow from cached
         # calibration samples (see calibration_store.py) - no model call needed here.
         self.zone_a_head = np.array(exit_zone_head) if exit_zone_head is not None else None
         self.zone_b_head = np.array(enter_zone_head) if enter_zone_head is not None else None
@@ -54,7 +58,9 @@ class VideoWorker(QThread):
 
     def run(self):
         try:
-            if self.logic == "v2":
+            if self.logic == "v3":
+                self._run_v3()
+            elif self.logic == "v2":
                 self._run_v2()
             else:
                 self._run_v1()
@@ -154,6 +160,53 @@ class VideoWorker(QThread):
             frame, active, fired = render_v2_frame(
                 r, frame_idx, self.zone_a_head, self.zone_b_head, self.zone_a, self.zone_b,
                 counter, trails, recent_events, HIGHLIGHT_FRAMES,
+                label_a="EXIT (head)", label_b="ENTER (head)",
+                label_a_foot="EXIT · foot (user-drawn)", label_b_foot="ENTER · foot (user-drawn)")
+            for tid, event in fired:
+                in_count += event == "in"
+                out_count += event == "out"
+                events.append((round(elapsed, 2), frame_idx, tid, event))
+                self.event_fired.emit(elapsed, tid, event)
+
+            presentation.duration = elapsed
+            canvas = presentation.render(frame, in_count, out_count, events, elapsed, active, fps=fps)
+            self.frame_ready.emit(self._to_qimage(canvas))
+
+        self.finished_clean.emit()
+
+    def _run_v3(self):
+        model = YOLO(MODEL_PATH_V3)
+        person_model = YOLO(MODEL_PATH_V1)  # per-frame overlap filter only, not tracked
+        counter = ZoneCounter()
+        trails = defaultdict(lambda: deque(maxlen=TRAIL_LEN))
+        recent_events = {}
+        events = []
+        in_count = out_count = 0
+        start = last_tick = time.monotonic()
+        fps = 0.0
+        presentation = Presentation(0, label_a="EXIT", label_b="ENTER",
+                                     footer="Live RTSP feed · AI-assisted counting (head-detected, v3)")
+
+        device = best_device()
+        print(f"video_worker: running inference on device={device} (v3/head-detected)")
+        results = model.track(self.source, conf=0.1, tracker=str(TRACKER_CONFIG_V3),
+                               stream=True, verbose=False, device=device)
+        for frame_idx, r in enumerate(results):
+            if self._stop:
+                break
+            elapsed = time.monotonic() - start
+            now = time.monotonic()
+            inst_fps = 1 / max(1e-6, now - last_tick)
+            fps = inst_fps if frame_idx == 0 else fps * 0.9 + inst_fps * 0.1
+            last_tick = now
+
+            # second model's inference every frame - same person-overlap filter as
+            # the batch v3 pipeline (see scripts/v3/people_counter_v3.py).
+            pr = person_model.predict(r.orig_img, classes=[0], conf=0.1, verbose=False, device=device)[0]
+            person_boxes = pr.boxes.xyxy.cpu().numpy() if pr.boxes is not None else np.zeros((0, 4))
+            frame, active, fired = render_v3_frame(
+                r, frame_idx, self.zone_a_head, self.zone_b_head, self.zone_a, self.zone_b,
+                counter, trails, recent_events, HIGHLIGHT_FRAMES, person_boxes,
                 label_a="EXIT (head)", label_b="ENTER (head)",
                 label_a_foot="EXIT · foot (user-drawn)", label_b_foot="ENTER · foot (user-drawn)")
             for tid, event in fired:

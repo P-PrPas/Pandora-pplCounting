@@ -10,3 +10,4 @@ scripts/v3/zones_head*.json
 # Generated clips/outputs — reproduce via scripts/people_counter.py or app/main.py.
 # Source clips are large and machine-local; see README/docs for how outputs were made.
 data/
+scripts/tracking_algo/.cache/

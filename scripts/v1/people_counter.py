@@ -19,8 +19,9 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-from presentation import Presentation, draw_track, draw_zones
-from counting import ZoneCounter, best_device, classify_point  # noqa: F401 (ZoneCounter re-exported for tests)
+from presentation import Presentation
+from counting import ZoneCounter, best_device, classify_point  # noqa: F401 (ZoneCounter/classify_point re-exported for tests)
+from foot_tracker import render_v1_frame
 
 HERE = Path(__file__).parent
 MODEL_PATH = HERE / "yolo11s.pt"
@@ -74,31 +75,12 @@ def main():
     results = model.track(src, classes=[0], conf=0.1, tracker=str(TRACKER_CONFIG),
                            stream=True, verbose=False, device=device)
     for frame_idx, r in enumerate(results):
-        frame = r.orig_img
-        occupied = []
-        draw_zones(frame, ZONE_A, ZONE_B, occupied)
-        active = 0
-
-        if r.boxes is not None and r.boxes.id is not None:
-            boxes = r.boxes.xyxy.cpu().numpy()
-            ids = r.boxes.id.cpu().numpy().astype(int)
-            active = len(ids)
-            for box, tid in zip(boxes, ids):
-                x1, y1, x2, y2 = box
-                foot = (int((x1 + x2) / 2), int(y2))
-                trails[tid].append(foot)
-
-                event = counter.update(tid, classify_point(foot, ZONE_A, ZONE_B))
-                if event:
-                    in_count += event == "in"
-                    out_count += event == "out"
-                    events.append((round(frame_idx / fps, 2), frame_idx, tid, event))
-                    recent_events[tid] = (event, frame_idx)
-
-                last = recent_events.get(tid)
-                highlighted = bool(last) and frame_idx - last[1] < HIGHLIGHT_FRAMES
-                draw_track(frame, box, tid, foot, trails[tid], highlighted,
-                           last[0] if last else None, occupied)
+        frame, active, fired = render_v1_frame(r, frame_idx, ZONE_A, ZONE_B,
+                                                counter, trails, recent_events, HIGHLIGHT_FRAMES)
+        for tid, event in fired:
+            in_count += event == "in"
+            out_count += event == "out"
+            events.append((round(frame_idx / fps, 2), frame_idx, tid, event))
 
         writer.write(presentation.render(frame, in_count, out_count, events,
                                          (frame_idx + 1) / fps, active))

@@ -1,0 +1,8 @@
+# Offline tracker-comparison research tool only - NOT used by the shipped
+# app (app/ keeps ultralytics' built-in ByteTrack). Install with:
+#   pip install -r scripts/tracking_algo/requirements.txt
+boxmot==25.0.0        # BoT-SORT, OC-SORT, DeepOCSORT, ByteTrack behind one API
+torchreid==0.2.5       # Re-ID feature extractor (osnet_x1_0) for McByte++'s adapter
+tensorboard==2.21.0    # transitive import of torchreid.reid.engine.engine
+cython_bbox==0.1.5     # IoU computation used by vendored McByte++ matching.py
+gdown==5.2.2           # ReID checkpoint auto-download (used internally by boxmot)

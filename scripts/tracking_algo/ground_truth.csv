@@ -1,0 +1,41 @@
+clip,frame_start,frame_end,direction,count,confidence,note
+clip1,64,123,out,1,medium,tail-only view of a receding/approaching figure exiting frame by f63-123
+clip1,120,174,out,2,medium,dense chain of 2-3 overlapping bodies growing+exiting; occlusion makes exact count uncertain
+clip1,170,224,out,0,low,new figures approaching but crossing not observed to completion within window; not counted
+clip1,416,416,none,0,medium-high,pair stands almost stationary at boundary (badge/phone check) - debounce-dwell artifact, no real translation
+clip1,466,466,none,0,medium-high,3-5 person queue clusters at threshold with only minor repositioning - dwell artifact
+clip1,539,540,out,1,high,one person detaches from a stationary pair and walks away growing continuously, exits frame
+clip1,586,632,out,2,medium-high,two distinguishable people each show sustained growth-and-exit trajectories; third figure is a fixed bystander
+clip1,673,701,out,2,high-medium,two people separate and complete clean sustained approach-and-exit in sequence
+clip1,780,811,out,2,medium,one clean exit caught in padding; a second person detaches from a huddle and walks out
+clip1,907,909,out,1,high,person separates from stationary trio, walks toward camera continuously, exits frame
+clip1,942,942,out,1,high,distinct person (from 907-909's) does clean sustained approach-and-exit; a bystander stays fixed
+clip1,982,982,in,1,high,person walks away from camera, shrinking continuously across the whole padded window
+clip1,1039,1039,none,0,high,confirmed debounce-dwell artifact - two people stand essentially motionless at boundary for ~1.7s
+clip1,1074,1074,none,0,high,same dwelling pair continues (~3.5s total with 1039) with intermittent spurious tag flashes
+clip1,1150,1215,out,1,medium-high,badge-scanning dweller (0 crossings) plus one distinct second person completing a genuine exit
+clip1,1265,1265,out,1,medium-high,person separates from a cluster, sustained growth/approach, nearly exits by end of window
+clip1,1306,1319,out,1,high,distinctly different-colored shirt person, easy to isolate from uniform ambiguity, clean exit
+clip1,1354,1354,none,0,low-medium,person stands in corridor near doorway with no sustained walking motion across ~1s window
+clip1,1389,1455,out,2,medium,two genuine OUT crossings (walk toward camera through gate); repeated same-ID/direction tag flashes are debounce repeats of these same 2 events, not separate crossings
+clip1,1530,1534,none,0,low-medium,gate-area huddle milling/adjusting with no clear crossing motion; tag flashes look like boundary jitter
+clip1,1568,1598,in,2,medium,dense entering queue, at least 2 distinct people show sustained receding motion into corridor
+clip1,1613,1643,in,1,medium-high,one additional person joins from outside and completes the doorway crossing within the window
+clip1,1664,1694,none,0,medium,only continued movement of already-crossed people plus a stationary man fixing his lanyard
+clip1,1714,1744,out,1,high,person walks continuously from deep in corridor to the gate, growing larger, clean sustained approach
+clip1,1765,1777,out,1,high,person walks from doorway out of frame with clear continuous stride
+clip1,1828,1884,out,1,high,person walks continuously out of frame, growing, in a wider dense window
+clip1,1828,1884,in,1,high,separate new entrant walks in from the gate and continues deeper into the doorway group
+clip1,1920,1920,in,1,high,person shows continuous walking gait, back to camera, receding into corridor across full window
+clip1,1978,1978,in,1,high,new entrant walks continuously deeper into corridor, clear leg strides every frame
+clip1,2070,2102,none,0,high,the only directional tag fires on a long-standing stationary doorway fixture - debounce artifact
+clip1,2114,2147,out,1,high,person shows clear continuous walking motion, growing steadily, ending near camera
+clip1,2176,2206,none,0,na,mid-motion continuation of the same event counted in 2213-2247, not double-counted here
+clip1,2213,2247,in,1,medium,person maintains consistent back-to-camera walking posture across ~2.8s span; tracker consensus agrees
+clip2,60,130,none,0,high,woman dwells at threshold fixing hair / interacting with wall-hook jacket for 6+ seconds, no translation
+clip2,140,220,in,1,high,one person walks continuously away from camera, receding into corridor over ~1s
+clip2,220,260,out,2,high-medium,two people (masked woman, long-haired woman) each walk steadily toward camera, growing continuously
+clip2,260,300,out,1,medium,person breaks off from a group and walks toward camera, partially occluded early on
+clip2,306,387,out,1,high,person carrying a white bag walks into the foreground and exits the ROI
+clip2,306,387,in,1,high,separate person walks away from camera deep into the corridor continuously for ~2.5s
+clip2,390,500,out,2,high-medium,two people (a round-trip walker plus a companion) walk toward camera in lockstep, growing continuously

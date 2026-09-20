@@ -32,7 +32,9 @@ def load_counts(tracker, version, clip):
     return ins, outs
 
 
-def main():
+def score_all():
+    """Returns (gt, scored) where scored[(tracker, version)] = (total_err, per_clip)
+    and per_clip[clip] = (pred_in, pred_out, err). Shared with visualize.py."""
     gt = ground_truth()
     scored = {}
     for t in TRACKERS:
@@ -46,6 +48,11 @@ def main():
                 err += e
                 per_clip[c] = (ins, outs, e)
             scored[(t, v)] = (err, per_clip)
+    return gt, scored
+
+
+def main():
+    gt, scored = score_all()
 
     print(f"Ground truth: clip1 IN={gt['clip1'][0]} OUT={gt['clip1'][1]}   "
           f"clip2 IN={gt['clip2'][0]} OUT={gt['clip2'][1]}\n")

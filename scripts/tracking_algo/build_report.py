@@ -1,0 +1,154 @@
+"""Assembles docs/tracking_algo_report.docx from the ground-truth scoring
+(score_trackers.py) and the plots in docs/tracking_algo_plots/ (visualize.py).
+Run visualize.py first if the plots don't exist yet.
+
+Usage: python3 scripts/tracking_algo/build_report.py
+"""
+import sys
+from pathlib import Path
+
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt
+
+sys.path.insert(0, str(Path(__file__).parent))
+from score_trackers import CLIPS, TRACKERS, VERSIONS, score_all  # noqa: E402
+
+DOCS = Path(__file__).parent.parent.parent / "docs"
+PLOTS = DOCS / "tracking_algo_plots"
+DISPLAY = {"bytetrack": "ByteTrack", "botsort": "BoT-SORT", "ocsort": "OC-SORT",
+           "deepocsort": "DeepOCSORT", "mcbyteplusplus": "McByte++"}
+
+
+def add_table(doc, headers, rows):
+    table = doc.add_table(rows=1, cols=len(headers))
+    table.style = "Light Grid Accent 1"
+    for cell, h in zip(table.rows[0].cells, headers):
+        cell.text = h
+        cell.paragraphs[0].runs[0].bold = True
+    for row in rows:
+        cells = table.add_row().cells
+        for cell, v in zip(cells, row):
+            cell.text = str(v)
+    return table
+
+
+def add_figure(doc, filename, caption):
+    doc.add_picture(str(PLOTS / filename), width=Inches(6))
+    doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p = doc.add_paragraph(caption)
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.runs[0].italic = True
+    p.runs[0].font.size = Pt(10)
+
+
+def main():
+    gt, scored = score_all()
+    doc = Document()
+
+    doc.add_heading("Tracking-Algorithm Ground Truth & Comparison Report", level=0)
+    doc.add_paragraph(
+        "Comparison of 5 trackers (ByteTrack, BoT-SORT, OC-SORT, DeepOCSORT, "
+        "McByte++) across 3 counting-logic versions (v1 foot-point, v2 pose/"
+        "neck, v3 head-detector), scored against manually reviewed ground "
+        "truth for the two dataset clips."
+    )
+
+    doc.add_heading("1. Methodology", level=1)
+    doc.add_paragraph(
+        "Ground truth was built by visually reviewing both clips frame-by-frame "
+        "against data/results/tracking_algo/bytetrack/v1/clip{1,2}.mp4 (the same "
+        "raw footage every tracker ran on; this render simply has the A/B zone "
+        "polygons burned in for reference). Candidate moments to check were found "
+        "by unioning all 5 trackers' own event frames and clustering nearby ones "
+        "— used only to bound review scope, never trusted as truth. Each "
+        "cluster was independently judged by sustained body motion through the "
+        "doorway (growing + approaching camera = OUT, shrinking + receding = IN), "
+        "ignoring track IDs (they churn under occlusion) and each tracker's own "
+        "flashed direction tag (that's exactly what's being verified). Full "
+        "per-cluster detail: scripts/tracking_algo/ground_truth.csv."
+    )
+
+    doc.add_heading("2. Ground Truth", level=1)
+    add_table(doc, ["Clip", "Genuine IN", "Genuine OUT", "Total"],
+              [[c, gt[c][0], gt[c][1], sum(gt[c])] for c in CLIPS])
+    doc.add_paragraph(
+        "Confidence note: clip1's opening ~8 seconds (frames 64-224) is the "
+        "least certain window — a dense, fully-occluded cluster of "
+        "identically-uniformed people; the true OUT count there is a best "
+        "estimate with a plausible range of 3-5. All other windows are "
+        "medium-high to high confidence."
+    )
+
+    doc.add_heading("3. Key Finding: Debounce-Dwell Artifacts", level=1)
+    doc.add_paragraph(
+        "ZoneCounter's DEBOUNCE_FRAMES=4 (0.16s) is short enough that a person "
+        "standing still exactly on the A/B boundary line (scanning a badge, "
+        "adjusting a mask, hanging a jacket on a wall hook) has their foot-point "
+        "jitter across the line and re-fires a “crossing” repeatedly with "
+        "no real movement. This is the dominant reason every tracker's raw count "
+        "runs higher than the true count — worst for trackers that hold an ID "
+        "alive longest through the dwell (McByte++'s Re-ID), since they get more "
+        "chances to re-trigger the same bug."
+    )
+
+    doc.add_heading("4. Visualizations", level=1)
+    add_figure(doc, "scatter_pairs.png",
+               "Figure 1. Signed IN/OUT count error per tracker×version pair, "
+               "summed over both clips. The gold star is the ground truth itself "
+               "— closer to it is more accurate.")
+    add_figure(doc, "predicted_vs_actual.png",
+               "Figure 2. Predicted vs. true total crossings per clip per pair, "
+               "against the y=x “perfect prediction” line. Points above the "
+               "line overcount; McByte++ overcounts most on the busy clip.")
+    add_figure(doc, "heatmap_error.png",
+               "Figure 3. Total absolute error (both clips combined) for every "
+               "tracker×version combination. Greener = closer to ground truth.")
+    add_figure(doc, "bar_tracker_ranking.png",
+               "Figure 4. Overall tracker ranking: average total error across "
+               "v1/v2/v3.")
+
+    doc.add_heading("5. Rankings", level=1)
+    doc.add_heading("5.1 Overall tracker ranking (avg error across v1/v2/v3)", level=2)
+    tracker_avg = sorted(
+        ((t, sum(scored[(t, v)][0] for v in VERSIONS) / len(VERSIONS)) for t in TRACKERS),
+        key=lambda kv: kv[1])
+    add_table(doc, ["Rank", "Tracker", "Avg error"],
+              [[i + 1, DISPLAY[t], f"{avg:.2f}"] for i, (t, avg) in enumerate(tracker_avg)])
+
+    doc.add_heading("5.2 Overall logic-version ranking (avg error across trackers)", level=2)
+    version_avg = sorted(
+        ((v, sum(scored[(t, v)][0] for t in TRACKERS) / len(TRACKERS)) for v in VERSIONS),
+        key=lambda kv: kv[1])
+    add_table(doc, ["Rank", "Version", "Avg error"],
+              [[i + 1, v, f"{avg:.2f}"] for i, (v, avg) in enumerate(version_avg)])
+
+    doc.add_heading("5.3 Best pair (tracker + logic version)", level=2)
+    pairs = sorted(scored.items(), key=lambda kv: kv[1][0])
+    add_table(doc, ["Rank", "Tracker", "Version", "Total error"],
+              [[i + 1, DISPLAY[t], v, err] for i, ((t, v), (err, _)) in enumerate(pairs)])
+
+    doc.add_heading("6. Conclusion", level=1)
+    best_tracker = tracker_avg[0][0]
+    best_pair = pairs[0][0]
+    doc.add_paragraph(
+        f"Overall best tracker: {DISPLAY[best_tracker]}. Best pair: "
+        f"{DISPLAY[best_pair[0]]} + {best_pair[1]} (error {pairs[0][1][0]}). "
+        "v1 (simple foot-point) wins across the board because it sits furthest "
+        "from where dwelling people linger at the doorway; v2/v3's neck/head "
+        "points sit closer to that congestion and jitter across the boundary "
+        "more. McByte++ ranks last not because its tracking is worse — it's "
+        "the most sophisticated tracker here — but because its stronger ID "
+        "retention exposes the shared counting logic's debounce weakness harder "
+        "than trackers that lose the ID to occlusion first. Next step: raise "
+        "DEBOUNCE_FRAMES from 4 to ~12-15 and re-score to see how much of this "
+        "gap closes."
+    )
+
+    out_path = DOCS / "tracking_algo_report.docx"
+    doc.save(out_path)
+    print(f"wrote {out_path}")
+
+
+if __name__ == "__main__":
+    main()

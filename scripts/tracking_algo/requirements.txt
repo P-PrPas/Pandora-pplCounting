@@ -6,3 +6,5 @@ torchreid==0.2.5       # Re-ID feature extractor (osnet_x1_0) for McByte++'s ada
 tensorboard==2.21.0    # transitive import of torchreid.reid.engine.engine
 cython_bbox==0.1.5     # IoU computation used by vendored McByte++ matching.py
 gdown==5.2.2           # ReID checkpoint auto-download (used internally by boxmot)
+matplotlib==3.11.1      # ground-truth comparison plots (visualize.py)
+python-docx==1.2.0      # .docx report assembly (build_report.py)

@@ -2,9 +2,10 @@
 ground-truth scoring in score_trackers.py. Pure post-processing on already
 computed numbers - no model inference.
 
-Usage: python3 scripts/tracking_algo/visualize.py
-Writes PNGs to docs/tracking_algo_plots/.
+Usage: python3 scripts/tracking_algo/visualize.py [--results-dir DIR] [--out-dir DIR]
+Writes PNGs to docs/tracking_algo_plots/ by default.
 """
+import argparse
 import sys
 from pathlib import Path
 
@@ -12,10 +13,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
-from score_trackers import CLIPS, TRACKERS, VERSIONS, score_all  # noqa: E402
+from score_trackers import CLIPS, RESULTS, TRACKERS, VERSIONS, score_all  # noqa: E402
 
 OUT_DIR = Path(__file__).parent.parent.parent / "docs" / "tracking_algo_plots"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Distinct marker per version, distinct color per tracker - standard paper-scatter idiom.
 MARKERS = {"v1": "o", "v2": "s", "v3": "^"}
@@ -24,7 +24,7 @@ DISPLAY = {"bytetrack": "ByteTrack", "botsort": "BoT-SORT", "ocsort": "OC-SORT",
            "deepocsort": "DeepOCSORT", "mcbyteplusplus": "McByte++"}
 
 
-def scatter_pairs(gt, scored):
+def scatter_pairs(gt, scored, out_dir=OUT_DIR):
     """The requested paper-style scatter: one point per (tracker, version) pair,
     axes = signed count error (predicted - true) per direction, summed over both
     clips. The origin is the ground truth itself - the closer to (0,0), the better."""
@@ -60,11 +60,11 @@ def scatter_pairs(gt, scored):
     ax.add_artist(leg1)
     ax.legend(handles=version_handles, title="Version", loc="lower right", fontsize=8)
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "scatter_pairs.png", dpi=150)
+    fig.savefig(out_dir / "scatter_pairs.png", dpi=150)
     plt.close(fig)
 
 
-def heatmap_error(scored):
+def heatmap_error(scored, out_dir=OUT_DIR):
     grid = np.array([[scored[(t, v)][0] for v in VERSIONS] for t in TRACKERS])
     fig, ax = plt.subplots(figsize=(5.5, 5))
     im = ax.imshow(grid, cmap="RdYlGn_r")
@@ -76,11 +76,11 @@ def heatmap_error(scored):
     ax.set_title("Total error (both clips) — lower is better")
     fig.colorbar(im, ax=ax, label="Total absolute error")
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "heatmap_error.png", dpi=150)
+    fig.savefig(out_dir / "heatmap_error.png", dpi=150)
     plt.close(fig)
 
 
-def bar_ranking(scored):
+def bar_ranking(scored, out_dir=OUT_DIR):
     tracker_avg = {t: np.mean([scored[(t, v)][0] for v in VERSIONS]) for t in TRACKERS}
     order = sorted(tracker_avg, key=tracker_avg.get)
     fig, ax = plt.subplots(figsize=(7, 4.5))
@@ -89,11 +89,11 @@ def bar_ranking(scored):
     ax.set_ylabel("Avg total error (v1/v2/v3)")
     ax.set_title("Overall tracker ranking — lower is better")
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "bar_tracker_ranking.png", dpi=150)
+    fig.savefig(out_dir / "bar_tracker_ranking.png", dpi=150)
     plt.close(fig)
 
 
-def predicted_vs_actual(gt, scored):
+def predicted_vs_actual(gt, scored, out_dir=OUT_DIR):
     """Classic ML-paper predicted-vs-actual scatter: total (IN+OUT) crossings per
     clip per pair, against the y=x line."""
     fig, ax = plt.subplots(figsize=(6.5, 6))
@@ -116,17 +116,42 @@ def predicted_vs_actual(gt, scored):
     ax.legend(handles=tracker_handles + [plt.Line2D([], [], linestyle="--", color="grey",
               label="perfect prediction")], fontsize=8, loc="upper left")
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "predicted_vs_actual.png", dpi=150)
+    fig.savefig(out_dir / "predicted_vs_actual.png", dpi=150)
+    plt.close(fig)
+
+
+def debounce_comparison(scored_before, scored_after, before_label, after_label, out_dir=OUT_DIR):
+    """Grouped bar chart: total error per tracker (avg across v1/v2/v3) before vs
+    after a DEBOUNCE_FRAMES change. Shows how much of the debounce-dwell
+    overcounting bug a given debounce value actually fixes."""
+    before_avg = [np.mean([scored_before[(t, v)][0] for v in VERSIONS]) for t in TRACKERS]
+    after_avg = [np.mean([scored_after[(t, v)][0] for v in VERSIONS]) for t in TRACKERS]
+    x = np.arange(len(TRACKERS))
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar(x - 0.2, before_avg, width=0.4, label=before_label, color="lightcoral")
+    ax.bar(x + 0.2, after_avg, width=0.4, label=after_label, color="mediumseagreen")
+    ax.set_xticks(x, [DISPLAY[t] for t in TRACKERS])
+    ax.set_ylabel("Avg total error (v1/v2/v3)")
+    ax.set_title("Debounce fix impact: total error before vs after")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_dir / "debounce_comparison.png", dpi=150)
     plt.close(fig)
 
 
 def main():
-    gt, scored = score_all()
-    scatter_pairs(gt, scored)
-    heatmap_error(scored)
-    bar_ranking(scored)
-    predicted_vs_actual(gt, scored)
-    print(f"wrote 4 plots to {OUT_DIR}")
+    p = argparse.ArgumentParser()
+    p.add_argument("--results-dir", type=Path, default=RESULTS)
+    p.add_argument("--out-dir", type=Path, default=OUT_DIR)
+    args = p.parse_args()
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    gt, scored = score_all(args.results_dir)
+    scatter_pairs(gt, scored, args.out_dir)
+    heatmap_error(scored, args.out_dir)
+    bar_ranking(scored, args.out_dir)
+    predicted_vs_actual(gt, scored, args.out_dir)
+    print(f"wrote 4 plots to {args.out_dir}")
 
 
 if __name__ == "__main__":

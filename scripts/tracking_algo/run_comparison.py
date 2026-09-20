@@ -3,8 +3,8 @@ every dataset clip, writing a lightweight (no dashboard - just the existing
 zone/track overlay plus a small burned-in label) annotated video + event-log
 csv per combo to data/results/tracking_algo/<tracker>/<version>/<clip>.{mp4,csv}.
 
-Usage: python3 scripts/tracking_algo/run_comparison.py [--tracker NAME] [--version v1|v2|v3] [--clip N]
-(no flags = full sweep: every tracker x every version x every clip)
+Usage: python3 scripts/tracking_algo/run_comparison.py [--tracker NAME] [--version v1|v2|v3] [--clip N] [--debounce N]
+(no flags = full sweep: every tracker x every version x every clip, default debounce=4)
 """
 import argparse
 import csv
@@ -63,9 +63,9 @@ def _v2_keypoints(tracked, cached_kpts):
     return out
 
 
-def run_one(tracker_name, version, clip_path, device):
+def run_one(tracker_name, version, clip_path, device, results_dir, debounce_frames):
     clip_name = f"clip{CLIPS.index(clip_path) + 1}"
-    out_dir = RESULTS_DIR / tracker_name / version
+    out_dir = results_dir / tracker_name / version
     out_dir.mkdir(parents=True, exist_ok=True)
     out_prefix = out_dir / clip_name
 
@@ -76,7 +76,7 @@ def run_one(tracker_name, version, clip_path, device):
     writer = cv2.VideoWriter(f"{out_prefix}.mp4", cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 
     tracker = build_tracker(tracker_name, device)
-    counter = ZoneCounter()
+    counter = ZoneCounter(debounce_frames=debounce_frames)
     trails = defaultdict(lambda: deque(maxlen=TRAIL_LEN))
     recent_events = {}
     events = []
@@ -139,10 +139,18 @@ def main():
     p.add_argument("--tracker", choices=TRACKER_NAMES)
     p.add_argument("--version", choices=["v1", "v2", "v3"])
     p.add_argument("--clip", type=int, help="1-based clip index")
+    p.add_argument("--debounce", type=int, default=4,
+                   help="ZoneCounter debounce_frames (default 4, matches shipped app). "
+                        "Non-default values write to a separate "
+                        "data/results/tracking_algo_debounce<N>/ tree so baseline "
+                        "results are never overwritten.")
     args = p.parse_args()
 
+    results_dir = RESULTS_DIR if args.debounce == 4 else \
+        REPO_ROOT / "data" / "results" / f"tracking_algo_debounce{args.debounce}"
+
     device = best_device()
-    print(f"run_comparison: device={device}")
+    print(f"run_comparison: device={device} debounce_frames={args.debounce} -> {results_dir}")
     trackers = [args.tracker] if args.tracker else TRACKER_NAMES
     versions = [args.version] if args.version else ["v1", "v2", "v3"]
     clips = [CLIPS[args.clip - 1]] if args.clip else CLIPS
@@ -151,7 +159,8 @@ def main():
     for version in versions:
         for clip_path in clips:
             for tracker_name in trackers:
-                summary[(tracker_name, version, clip_path.stem)] = run_one(tracker_name, version, clip_path, device)
+                summary[(tracker_name, version, clip_path.stem)] = run_one(
+                    tracker_name, version, clip_path, device, results_dir, args.debounce)
 
     print("\n=== summary ===")
     for key, (i, o, e) in summary.items():

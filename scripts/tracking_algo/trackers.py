@@ -19,11 +19,19 @@ REID_WEIGHTS = "osnet_x1_0_market1501.pt"
 
 # Camera is fixed (see README) - camera-motion-compensation buys nothing here
 # and costs real per-frame time, so it's off for BotSort in this harness.
+# ponytail: boxmot's own select_device() only accepts "cpu"/"mps" or a GPU
+# index ("0", "0,1") - not the literal "cuda" torch.device() itself accepts.
+# best_device() (scripts/v1/counting.py) returns "cuda"; remap only for the
+# boxmot-backed builders below (ByteTrack/OcSort ignore device entirely).
+def _boxmot_device(device):
+    return "0" if device == "cuda" else device
+
+
 BUILDERS = {
     "bytetrack": lambda device: ByteTrack(),
-    "botsort": lambda device: BotSort(reid_weights=REID_WEIGHTS, device=device, use_cmc=False),
+    "botsort": lambda device: BotSort(reid_weights=REID_WEIGHTS, device=_boxmot_device(device), use_cmc=False),
     "ocsort": lambda device: OcSort(),
-    "deepocsort": lambda device: DeepOcSort(reid_weights=REID_WEIGHTS, device=device),
+    "deepocsort": lambda device: DeepOcSort(reid_weights=REID_WEIGHTS, device=_boxmot_device(device)),
 }
 
 TRACKER_NAMES = [*BUILDERS, "mcbyteplusplus"]

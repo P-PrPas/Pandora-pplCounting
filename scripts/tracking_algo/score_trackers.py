@@ -3,8 +3,10 @@ ground truth (scripts/tracking_algo/ground_truth.csv), and ranks them overall
 and as tracker+version pairs. See docs/tracking_algo_ground_truth.md for the
 full methodology writeup.
 
-Usage: python3 scripts/tracking_algo/score_trackers.py
+Usage: python3 scripts/tracking_algo/score_trackers.py [--results-dir DIR]
+(default results dir = data/results/tracking_algo, the debounce=4 baseline)
 """
+import argparse
 import csv
 from collections import defaultdict
 from pathlib import Path
@@ -25,16 +27,18 @@ def ground_truth():
     return totals
 
 
-def load_counts(tracker, version, clip):
-    rows = list(csv.DictReader(open(RESULTS / tracker / version / f"{clip}.csv")))
+def load_counts(tracker, version, clip, results_dir=RESULTS):
+    rows = list(csv.DictReader(open(results_dir / tracker / version / f"{clip}.csv")))
     ins = sum(1 for r in rows if r["direction"] == "in")
     outs = sum(1 for r in rows if r["direction"] == "out")
     return ins, outs
 
 
-def score_all():
+def score_all(results_dir=RESULTS):
     """Returns (gt, scored) where scored[(tracker, version)] = (total_err, per_clip)
-    and per_clip[clip] = (pred_in, pred_out, err). Shared with visualize.py."""
+    and per_clip[clip] = (pred_in, pred_out, err). Shared with visualize.py.
+    results_dir lets callers score any run_comparison.py output tree (e.g. a
+    non-default --debounce sweep) against the same ground truth."""
     gt = ground_truth()
     scored = {}
     for t in TRACKERS:
@@ -42,7 +46,7 @@ def score_all():
             err = 0
             per_clip = {}
             for c in CLIPS:
-                ins, outs = load_counts(t, v, c)
+                ins, outs = load_counts(t, v, c, results_dir)
                 gi, go = gt[c]
                 e = abs(ins - gi) + abs(outs - go)
                 err += e
@@ -52,7 +56,10 @@ def score_all():
 
 
 def main():
-    gt, scored = score_all()
+    p = argparse.ArgumentParser()
+    p.add_argument("--results-dir", type=Path, default=RESULTS)
+    args = p.parse_args()
+    gt, scored = score_all(args.results_dir)
 
     print(f"Ground truth: clip1 IN={gt['clip1'][0]} OUT={gt['clip1'][1]}   "
           f"clip2 IN={gt['clip2'][0]} OUT={gt['clip2'][1]}\n")

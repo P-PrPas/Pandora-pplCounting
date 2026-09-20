@@ -41,9 +41,11 @@ class McByteAdapter:
         # (general-pedestrian, not McByte++'s own sports-tuned default).
         from boxmot import BotSort
         from boxmot.reid.core.runtime import WEIGHTS
+
+        from trackers import _boxmot_device
         reid_path = WEIGHTS / reid_weights
         if not reid_path.exists():
-            BotSort(reid_weights=reid_weights, device=device)  # side effect: downloads it
+            BotSort(reid_weights=reid_weights, device=_boxmot_device(device))  # side effect: downloads it
 
         # Values match this project's own tuned bytetrack_custom.yaml (crowded-
         # doorway, ~60-frame occlusion buffer at 25fps) so all trackers here see

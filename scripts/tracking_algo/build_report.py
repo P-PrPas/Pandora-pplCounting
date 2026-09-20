@@ -12,8 +12,11 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
 sys.path.insert(0, str(Path(__file__).parent))
-from score_trackers import CLIPS, TRACKERS, VERSIONS, score_all  # noqa: E402
+from score_trackers import CLIPS, RESULTS, TRACKERS, VERSIONS, score_all  # noqa: E402
+from visualize import debounce_comparison  # noqa: E402
 
+REPO_ROOT = Path(__file__).parent.parent.parent
+DEBOUNCE15_DIR = REPO_ROOT / "data" / "results" / "tracking_algo_debounce15"
 DOCS = Path(__file__).parent.parent.parent / "docs"
 PLOTS = DOCS / "tracking_algo_plots"
 DISPLAY = {"bytetrack": "ByteTrack", "botsort": "BoT-SORT", "ocsort": "OC-SORT",
@@ -144,6 +147,47 @@ def main():
         "DEBOUNCE_FRAMES from 4 to ~12-15 and re-score to see how much of this "
         "gap closes."
     )
+
+    if DEBOUNCE15_DIR.exists():
+        gt15, scored15 = score_all(DEBOUNCE15_DIR)
+        debounce_comparison(scored, scored15, "debounce=4 (baseline)", "debounce=15", PLOTS)
+
+        doc.add_heading("7. Debounce Experiment (DEBOUNCE_FRAMES 4 → 15)", level=1)
+        doc.add_paragraph(
+            "Section 3 identified boundary-dwell jitter (DEBOUNCE_FRAMES=4, "
+            "0.16s) as the dominant source of overcounting. This section "
+            "re-runs the full comparison with DEBOUNCE_FRAMES=15 (0.6s) — "
+            "long enough to absorb a stationary dwell — against the same "
+            "ground truth, with results kept in a separate "
+            "data/results/tracking_algo_debounce15/ tree so the debounce=4 "
+            "baseline above is untouched."
+        )
+        add_figure(doc, "debounce_comparison.png",
+                   "Figure 5. Total error per tracker (avg across v1/v2/v3), "
+                   "debounce=4 vs debounce=15.")
+
+        tracker_avg15 = {t: sum(scored15[(t, v)][0] for v in VERSIONS) / len(VERSIONS)
+                          for t in TRACKERS}
+        add_table(doc, ["Tracker", "Avg error (debounce=4)", "Avg error (debounce=15)", "Change"],
+                  [[DISPLAY[t], f"{dict(tracker_avg)[t]:.2f}", f"{tracker_avg15[t]:.2f}",
+                    f"{tracker_avg15[t] - dict(tracker_avg)[t]:+.2f}"] for t in TRACKERS])
+
+        pairs15 = dict(pairs)
+        rows = []
+        for (t, v), (err4, _) in pairs:
+            err15 = scored15[(t, v)][0]
+            rows.append([DISPLAY[t], v, err4, err15, f"{err15 - err4:+d}"])
+        rows.sort(key=lambda r: r[3])
+        doc.add_heading("7.1 Per-pair error, before vs after", level=2)
+        add_table(doc, ["Tracker", "Version", "Error (debounce=4)", "Error (debounce=15)", "Change"], rows)
+
+        best_pair15 = min(scored15.items(), key=lambda kv: kv[1][0])
+        doc.add_paragraph(
+            f"At debounce=15, the best pair is {DISPLAY[best_pair15[0][0]]} + "
+            f"{best_pair15[0][1]} (error {best_pair15[1][0]}), vs "
+            f"{DISPLAY[best_pair[0]]} + {best_pair[1]} (error {pairs[0][1][0]}) "
+            "at debounce=4."
+        )
 
     out_path = DOCS / "tracking_algo_report.docx"
     doc.save(out_path)

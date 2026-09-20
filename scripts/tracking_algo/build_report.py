@@ -12,11 +12,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
 sys.path.insert(0, str(Path(__file__).parent))
-from score_trackers import CLIPS, RESULTS, TRACKERS, VERSIONS, score_all  # noqa: E402
-from visualize import debounce_comparison  # noqa: E402
+from score_trackers import CLIPS, TRACKERS, VERSIONS, score_all  # noqa: E402
 
-REPO_ROOT = Path(__file__).parent.parent.parent
-DEBOUNCE15_DIR = REPO_ROOT / "data" / "results" / "tracking_algo_debounce15"
 DOCS = Path(__file__).parent.parent.parent / "docs"
 PLOTS = DOCS / "tracking_algo_plots"
 DISPLAY = {"bytetrack": "ByteTrack", "botsort": "BoT-SORT", "ocsort": "OC-SORT",
@@ -85,21 +82,23 @@ def main():
 
     doc.add_heading("3. Key Finding: Debounce-Dwell Artifacts", level=1)
     doc.add_paragraph(
-        "ZoneCounter's DEBOUNCE_FRAMES=4 (0.16s) is short enough that a person "
-        "standing still exactly on the A/B boundary line (scanning a badge, "
-        "adjusting a mask, hanging a jacket on a wall hook) has their foot-point "
-        "jitter across the line and re-fires a “crossing” repeatedly with "
-        "no real movement. This is the dominant reason every tracker's raw count "
-        "runs higher than the true count — worst for trackers that hold an ID "
-        "alive longest through the dwell (McByte++'s Re-ID), since they get more "
-        "chances to re-trigger the same bug."
+        "The dominant remaining source of overcounting is boundary-dwell "
+        "jitter: a person standing still exactly on the A/B line (scanning a "
+        "badge, adjusting a mask, hanging a jacket on a wall hook) has their "
+        "crossing point jitter back and forth across the line and re-fires a "
+        "“crossing” with no real movement. ZoneCounter's DEBOUNCE_FRAMES=15 "
+        "(0.6s) absorbs most of this, but it still shows up worst for "
+        "trackers that hold an ID alive longest through the dwell (McByte++'s "
+        "Re-ID), since they get more chances to re-trigger it."
     )
 
     doc.add_heading("4. Visualizations", level=1)
     add_figure(doc, "scatter_pairs.png",
                "Figure 1. Signed IN/OUT count error per tracker×version pair, "
-               "summed over both clips. The gold star is the ground truth itself "
-               "— closer to it is more accurate.")
+               "summed over both clips. The gold star is ground truth; dashed "
+               "diamond rings mark equal total error, so two points on the "
+               "same ring are exactly tied. Numbers rank each pair best (1) "
+               "to worst — see the ranking list on the right of the figure.")
     add_figure(doc, "predicted_vs_actual.png",
                "Figure 2. Predicted vs. true total crossings per clip per pair, "
                "against the y=x “perfect prediction” line. Points above the "
@@ -132,62 +131,22 @@ def main():
               [[i + 1, DISPLAY[t], v, err] for i, ((t, v), (err, _)) in enumerate(pairs)])
 
     doc.add_heading("6. Conclusion", level=1)
-    best_tracker = tracker_avg[0][0]
+    best_tracker, best_tracker_avg = tracker_avg[0]
+    best_version, best_version_avg = version_avg[0]
     best_pair = pairs[0][0]
     doc.add_paragraph(
-        f"Overall best tracker: {DISPLAY[best_tracker]}. Best pair: "
+        f"Overall best tracker: {DISPLAY[best_tracker]} (avg error "
+        f"{best_tracker_avg:.2f}). Overall best logic version: {best_version} "
+        f"(avg error {best_version_avg:.2f}). Best pair: "
         f"{DISPLAY[best_pair[0]]} + {best_pair[1]} (error {pairs[0][1][0]}). "
-        "v1 (simple foot-point) wins across the board because it sits furthest "
-        "from where dwelling people linger at the doorway; v2/v3's neck/head "
-        "points sit closer to that congestion and jitter across the boundary "
-        "more. McByte++ ranks last not because its tracking is worse — it's "
-        "the most sophisticated tracker here — but because its stronger ID "
-        "retention exposes the shared counting logic's debounce weakness harder "
-        "than trackers that lose the ID to occlusion first. Next step: raise "
-        "DEBOUNCE_FRAMES from 4 to ~12-15 and re-score to see how much of this "
-        "gap closes."
+        "McByte++ ranks last despite being the most sophisticated tracker here "
+        "(Re-ID, mask-aware) — its stronger ID retention keeps a dwelling "
+        "person's identity alive longer, giving the shared counting logic's "
+        "boundary-jitter weakness (Section 3) more chances to re-trigger; its "
+        "tracking quality isn't necessarily worse, it's just better at exposing "
+        "that bug. The gap between the top four trackers is small relative to "
+        "clip-to-clip noise — don't over-read fine differences among them."
     )
-
-    if DEBOUNCE15_DIR.exists():
-        gt15, scored15 = score_all(DEBOUNCE15_DIR)
-        debounce_comparison(scored, scored15, "debounce=4 (baseline)", "debounce=15", PLOTS)
-
-        doc.add_heading("7. Debounce Experiment (DEBOUNCE_FRAMES 4 → 15)", level=1)
-        doc.add_paragraph(
-            "Section 3 identified boundary-dwell jitter (DEBOUNCE_FRAMES=4, "
-            "0.16s) as the dominant source of overcounting. This section "
-            "re-runs the full comparison with DEBOUNCE_FRAMES=15 (0.6s) — "
-            "long enough to absorb a stationary dwell — against the same "
-            "ground truth, with results kept in a separate "
-            "data/results/tracking_algo_debounce15/ tree so the debounce=4 "
-            "baseline above is untouched."
-        )
-        add_figure(doc, "debounce_comparison.png",
-                   "Figure 5. Total error per tracker (avg across v1/v2/v3), "
-                   "debounce=4 vs debounce=15.")
-
-        tracker_avg15 = {t: sum(scored15[(t, v)][0] for v in VERSIONS) / len(VERSIONS)
-                          for t in TRACKERS}
-        add_table(doc, ["Tracker", "Avg error (debounce=4)", "Avg error (debounce=15)", "Change"],
-                  [[DISPLAY[t], f"{dict(tracker_avg)[t]:.2f}", f"{tracker_avg15[t]:.2f}",
-                    f"{tracker_avg15[t] - dict(tracker_avg)[t]:+.2f}"] for t in TRACKERS])
-
-        pairs15 = dict(pairs)
-        rows = []
-        for (t, v), (err4, _) in pairs:
-            err15 = scored15[(t, v)][0]
-            rows.append([DISPLAY[t], v, err4, err15, f"{err15 - err4:+d}"])
-        rows.sort(key=lambda r: r[3])
-        doc.add_heading("7.1 Per-pair error, before vs after", level=2)
-        add_table(doc, ["Tracker", "Version", "Error (debounce=4)", "Error (debounce=15)", "Change"], rows)
-
-        best_pair15 = min(scored15.items(), key=lambda kv: kv[1][0])
-        doc.add_paragraph(
-            f"At debounce=15, the best pair is {DISPLAY[best_pair15[0][0]]} + "
-            f"{best_pair15[0][1]} (error {best_pair15[1][0]}), vs "
-            f"{DISPLAY[best_pair[0]]} + {best_pair[1]} (error {pairs[0][1][0]}) "
-            "at debounce=4."
-        )
 
     out_path = DOCS / "tracking_algo_report.docx"
     doc.save(out_path)

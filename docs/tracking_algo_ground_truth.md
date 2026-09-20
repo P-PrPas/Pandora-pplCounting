@@ -23,18 +23,16 @@ being verified).
 Full per-cluster breakdown: `scripts/tracking_algo/ground_truth.csv`.
 Reproducible scoring: `scripts/tracking_algo/score_trackers.py`.
 
-### Biggest source of tracker overcounting: debounce-dwell artifacts
+### Biggest source of remaining tracker overcounting: boundary-dwell jitter
 
-`ZoneCounter`'s `DEBOUNCE_FRAMES=4` (0.16s) is short enough that a person
-standing still exactly on the A/B boundary line — scanning a badge, adjusting
-a mask, hanging a jacket on a wall hook — gets their foot-point jitter across
-the line and re-fires a "crossing" repeatedly with no real movement. This
-pattern recurred many times across both clips (e.g. clip1 frames 416, 466,
-1039, 1074, 2070-2102; clip2 frames 60-130) and is the dominant reason every
-tracker's raw count runs higher than the true count, especially for trackers
-that hold onto an ID longer (McByte++'s Re-ID keeps the dwelling person's ID
-alive, so it re-fires the debounce bug more than trackers that lose the ID to
-occlusion first).
+A person standing still exactly on the A/B boundary line — scanning a badge,
+adjusting a mask, hanging a jacket on a wall hook — can have their crossing
+point jitter back and forth across the line and re-fire a "crossing" with no
+real movement. `ZoneCounter`'s `DEBOUNCE_FRAMES=15` (0.6s) absorbs most of
+this, but it's still the dominant reason any tracker's raw count runs above
+the true count, especially for trackers that hold onto an ID longest through
+the dwell (McByte++'s Re-ID keeps the dwelling person's ID alive longer than
+the others, so it re-fires the bug more).
 
 ## Ground truth
 
@@ -60,90 +58,59 @@ only the automated counting method differs).
 
 | Rank | Tracker | Avg error |
 |---|---|---|
-| 1 | OC-SORT | 14.3 |
-| 1 | DeepOCSORT | 14.3 |
-| 3 | BoT-SORT | 15.7 |
-| 4 | ByteTrack | 16.7 |
-| 5 | McByte++ | 30.0 |
+| 1 | OC-SORT | 9.33 |
+| 2 | BoT-SORT | 10.00 |
+| 3 | ByteTrack | 10.67 |
+| 3 | DeepOCSORT | 10.67 |
+| 5 | McByte++ | 19.67 |
 
 McByte++ ranks last despite being the most sophisticated tracker (Re-ID,
 mask-aware) — because it keeps IDs alive through the exact scenario
-(stationary dwell at the boundary) that the counting logic's debounce weakness
+(stationary dwell at the boundary) that the counting logic's debounce
 punishes hardest. Its tracking quality isn't necessarily worse than the
-others'; it's just better at exposing an existing bug in `ZoneCounter`, not at
-avoiding it. OC-SORT and DeepOCSORT come out slightly ahead of BoT-SORT and
-ByteTrack, but the gap between the top 4 is small relative to clip-to-clip
+others'; it's just better at exposing this weakness, not at avoiding it.
+The gap between the top four trackers is small relative to clip-to-clip
 noise — don't over-read fine differences among them.
 
 ### Overall logic-version ranking (averaged across trackers)
 
 | Rank | Version | Avg error |
 |---|---|---|
-| 1 | v1 (foot point) | 16.6 |
-| 2 | v3 (head detector) | 18.4 |
-| 3 | v2 (pose/neck) | 19.6 |
+| 1 | v3 (head detector) | 10.40 |
+| 2 | v1 (foot point) | 12.00 |
+| 3 | v2 (pose/neck) | 13.80 |
 
 ### Best pair (tracker x logic version), full ranking
 
 | Rank | Tracker | Version | Error |
 |---|---|---|---|
-| 1 | BoT-SORT | v1 | 12 |
-| 1 | OC-SORT | v1 | 12 |
-| 3 | DeepOCSORT | v1 | 12 |
-| 4 | ByteTrack | v1 | 14 |
-| 5 | OC-SORT | v3 | 14 |
-| 6 | DeepOCSORT | v3 | 15 |
-| 7 | ByteTrack | v2 | 16 |
-| 7 | BoT-SORT | v2 | 16 |
-| 7 | DeepOCSORT | v2 | 16 |
-| 10 | OC-SORT | v2 | 17 |
-| 11 | BoT-SORT | v3 | 19 |
-| 12 | ByteTrack | v3 | 20 |
-| 13 | McByte++ | v3 | 24 |
-| 14 | McByte++ | v1 | 33 |
-| 15 | McByte++ | v2 | 33 |
+| 1 | OC-SORT | v1 | 8 |
+| 1 | OC-SORT | v3 | 8 |
+| 3 | BoT-SORT | v1 | 9 |
+| 3 | DeepOCSORT | v1 | 9 |
+| 3 | McByte++ | v3 | 9 |
+| 6 | ByteTrack | v1 | 10 |
+| 6 | ByteTrack | v3 | 10 |
+| 6 | BoT-SORT | v2 | 10 |
+| 9 | BoT-SORT | v3 | 11 |
+| 9 | DeepOCSORT | v2 | 11 |
+| 11 | ByteTrack | v2 | 12 |
+| 11 | OC-SORT | v2 | 12 |
+| 11 | DeepOCSORT | v3 | 12 |
+| 14 | McByte++ | v1 | 18 |
+| 15 | McByte++ | v2 | 20 |
 
-**Best pair: BoT-SORT + v1** (tied with OC-SORT + v1 and close to DeepOCSORT + v1) —
-v1 (simple foot-point zone crossing) wins across the board because it's the
-version least exposed to the debounce-dwell bug: v2/v3's head/pose-based
-points sit closer to the doorway's vertical midline where dwelling people
-linger, so they jitter across the boundary line more than a foot point does.
-Fixing `DEBOUNCE_FRAMES` (raise from 4 to ~12-15 frames) is a separate,
-not-yet-implemented task that would likely close most of this gap for v2/v3
-and for McByte++ specifically, since the issue is in the shared counting
-logic, not in any one tracker.
-
-## Debounce experiment: DEBOUNCE_FRAMES 4 → 15
-
-Re-ran the full 5-tracker x 3-version comparison with `DEBOUNCE_FRAMES=15`
-(0.6s, long enough to absorb a stationary dwell at the boundary), keeping
-results in a separate `data/results/tracking_algo_debounce15/` tree so the
-debounce=4 baseline above is untouched. Reproduce with:
-`python3 scripts/tracking_algo/run_comparison.py --debounce 15`, score with
-`python3 scripts/tracking_algo/score_trackers.py --results-dir data/results/tracking_algo_debounce15`.
-
-| Tracker | Avg error (debounce=4) | Avg error (debounce=15) | Change |
-|---|---|---|---|
-| OC-SORT | 14.33 | 9.33 | -5.00 |
-| BoT-SORT | 15.67 | 10.00 | -5.67 |
-| ByteTrack | 16.67 | 10.67 | -6.00 |
-| DeepOCSORT | 14.33 | 10.67 | -3.67 |
-| McByte++ | 30.00 | 19.67 | -10.33 |
-
-The fix confirms the hypothesis: every tracker's error dropped, McByte++ most
-of all in absolute terms (though it still ranks last — its stronger Re-ID
-still keeps dwelling IDs alive across a 15-frame window better than the
-others, so it still re-triggers the bug more often than trackers that lose
-the ID sooner). The version ranking also flips: v3 (head detector) is now
-best on average (10.40) instead of v1 (12.00) — with the debounce bug mostly
-fixed, v3's more accurate head-based crossing point starts to pay off instead
-of being swamped by dwell jitter. New best pair: **OC-SORT + v1** (error 8,
-down from 12), with OC-SORT + v3 tied close behind (error 8 as well). Full
-before/after per-pair table and chart: `docs/tracking_algo_report.docx`
-section 7.
+**Best pair: OC-SORT + v1**, tied with OC-SORT + v3. Unlike the earlier v1
+foot-point sweep, v3's head-detector point is now competitive (best on
+average) once boundary jitter isn't dominating — a more accurate crossing
+point starts to pay off instead of being swamped by dwell noise. McByte++'s
+own v3 pairing (error 9) is close behind and far ahead of its v1/v2 pairings,
+suggesting v3's cleaner crossing point also helps offset its stronger,
+bug-exposing ID retention.
 
 See `docs/tracking_algo_report.docx` for the full visual report (scatter
-plot, heatmap, per-tracker bar charts, predicted-vs-actual, and the
-debounce before/after comparison) generated from this same scoring pipeline
-via `scripts/tracking_algo/visualize.py` + `scripts/tracking_algo/build_report.py`.
-
+plot, heatmap, per-tracker bar chart, predicted-vs-actual) generated from
+this same scoring pipeline via `scripts/tracking_algo/visualize.py` +
+`scripts/tracking_algo/build_report.py`. An earlier report comparing
+`DEBOUNCE_FRAMES=4` vs `15` (the tuning work behind the value used above) is
+kept for reference at `docs/tracking_algo_debounce_experiment_report.docx`.

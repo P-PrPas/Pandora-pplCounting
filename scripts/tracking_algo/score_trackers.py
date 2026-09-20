@@ -4,7 +4,7 @@ and as tracker+version pairs. See docs/tracking_algo_ground_truth.md for the
 full methodology writeup.
 
 Usage: python3 scripts/tracking_algo/score_trackers.py [--results-dir DIR]
-(default results dir = data/results/tracking_algo, the debounce=4 baseline)
+(default results dir = data/results/tracking_algo, ZoneCounter debounce_frames=15)
 """
 import argparse
 import csv

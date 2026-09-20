@@ -4,7 +4,7 @@ zone/track overlay plus a small burned-in label) annotated video + event-log
 csv per combo to data/results/tracking_algo/<tracker>/<version>/<clip>.{mp4,csv}.
 
 Usage: python3 scripts/tracking_algo/run_comparison.py [--tracker NAME] [--version v1|v2|v3] [--clip N] [--debounce N]
-(no flags = full sweep: every tracker x every version x every clip, default debounce=4)
+(no flags = full sweep: every tracker x every version x every clip, default debounce=15)
 """
 import argparse
 import csv
@@ -139,14 +139,14 @@ def main():
     p.add_argument("--tracker", choices=TRACKER_NAMES)
     p.add_argument("--version", choices=["v1", "v2", "v3"])
     p.add_argument("--clip", type=int, help="1-based clip index")
-    p.add_argument("--debounce", type=int, default=4,
-                   help="ZoneCounter debounce_frames (default 4, matches shipped app). "
-                        "Non-default values write to a separate "
-                        "data/results/tracking_algo_debounce<N>/ tree so baseline "
+    p.add_argument("--debounce", type=int, default=15,
+                   help="ZoneCounter debounce_frames (default 15, this project's chosen "
+                        "value). Non-default values write to a separate "
+                        "data/results/tracking_algo_debounce<N>/ tree so the canonical "
                         "results are never overwritten.")
     args = p.parse_args()
 
-    results_dir = RESULTS_DIR if args.debounce == 4 else \
+    results_dir = RESULTS_DIR if args.debounce == 15 else \
         REPO_ROOT / "data" / "results" / f"tracking_algo_debounce{args.debounce}"
 
     device = best_device()

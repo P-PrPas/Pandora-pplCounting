@@ -98,15 +98,20 @@ def main():
                "error (both clips combined), shortest bar = lowest error = "
                "best. Gold-edged bars mark the best pair(s); equal-length "
                "bars with equal printed numbers are exact ties.")
+    add_figure(doc, "scatter_pairs.png",
+               "Figure 2. Signed IN vs. OUT count error per pair (color = "
+               "tracker, shape = version); the gold star is ground truth, so "
+               "the closer to the star, the better. Everything sits in the "
+               "same direction (over-counts both IN and OUT); none under-count.")
     add_figure(doc, "predicted_vs_actual.png",
-               "Figure 2. Predicted vs. true total crossings per clip per pair, "
+               "Figure 3. Predicted vs. true total crossings per clip per pair, "
                "against the y=x “perfect prediction” line. Points above the "
                "line overcount; McByte++ overcounts most on the busy clip.")
     add_figure(doc, "heatmap_error.png",
-               "Figure 3. Total absolute error (both clips combined) for every "
+               "Figure 4. Total absolute error (both clips combined) for every "
                "tracker×version combination. Greener = closer to ground truth.")
     add_figure(doc, "bar_tracker_ranking.png",
-               "Figure 4. Overall tracker ranking: average total error across "
+               "Figure 5. Overall tracker ranking: average total error across "
                "v1/v2/v3.")
 
     doc.add_heading("5. Rankings", level=1)

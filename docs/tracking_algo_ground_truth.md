@@ -109,7 +109,8 @@ suggesting v3's cleaner crossing point also helps offset its stronger,
 bug-exposing ID retention.
 
 See `docs/tracking_algo_report.docx` for the full visual report (ranked bar
-chart, heatmap, per-tracker bar chart, predicted-vs-actual) generated from
+chart, signed-error scatter, heatmap, per-tracker bar chart, predicted-vs-
+actual) generated from
 this same scoring pipeline via `scripts/tracking_algo/visualize.py` +
 `scripts/tracking_algo/build_report.py`. An earlier report comparing
 `DEBOUNCE_FRAMES=4` vs `15` (the tuning work behind the value used above) is

@@ -93,12 +93,11 @@ def main():
     )
 
     doc.add_heading("4. Visualizations", level=1)
-    add_figure(doc, "scatter_pairs.png",
-               "Figure 1. Signed IN/OUT count error per tracker×version pair, "
-               "summed over both clips. The gold star is ground truth; dashed "
-               "diamond rings mark equal total error, so two points on the "
-               "same ring are exactly tied. Numbers rank each pair best (1) "
-               "to worst — see the ranking list on the right of the figure.")
+    add_figure(doc, "pair_ranking.png",
+               "Figure 1. Every tracker×version pair ranked by total count "
+               "error (both clips combined), shortest bar = lowest error = "
+               "best. Gold-edged bars mark the best pair(s); equal-length "
+               "bars with equal printed numbers are exact ties.")
     add_figure(doc, "predicted_vs_actual.png",
                "Figure 2. Predicted vs. true total crossings per clip per pair, "
                "against the y=x “perfect prediction” line. Points above the "

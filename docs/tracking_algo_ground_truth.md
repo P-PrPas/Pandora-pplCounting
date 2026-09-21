@@ -88,28 +88,28 @@ noise — don't over-read fine differences among them.
 | 1 | OC-SORT | v3 | 8 |
 | 3 | BoT-SORT | v1 | 9 |
 | 3 | DeepOCSORT | v1 | 9 |
-| 3 | McByte++ | v3 | 9 |
-| 6 | ByteTrack | v1 | 10 |
-| 6 | ByteTrack | v3 | 10 |
-| 6 | BoT-SORT | v2 | 10 |
-| 9 | BoT-SORT | v3 | 11 |
-| 9 | DeepOCSORT | v2 | 11 |
+| 5 | ByteTrack | v1 | 10 |
+| 5 | ByteTrack | v3 | 10 |
+| 5 | BoT-SORT | v2 | 10 |
+| 8 | BoT-SORT | v3 | 11 |
+| 8 | DeepOCSORT | v2 | 11 |
+| 8 | McByte++ | v3 | 11 |
 | 11 | ByteTrack | v2 | 12 |
 | 11 | OC-SORT | v2 | 12 |
 | 11 | DeepOCSORT | v3 | 12 |
-| 14 | McByte++ | v1 | 18 |
-| 15 | McByte++ | v2 | 20 |
+| 14 | McByte++ | v1 | 24 |
+| 14 | McByte++ | v2 | 24 |
 
 **Best pair: OC-SORT + v1**, tied with OC-SORT + v3. Unlike the earlier v1
 foot-point sweep, v3's head-detector point is now competitive (best on
 average) once boundary jitter isn't dominating — a more accurate crossing
 point starts to pay off instead of being swamped by dwell noise. McByte++'s
-own v3 pairing (error 9) is close behind and far ahead of its v1/v2 pairings,
+own v3 pairing (error 11) is close behind and far ahead of its v1/v2 pairings,
 suggesting v3's cleaner crossing point also helps offset its stronger,
 bug-exposing ID retention.
 
-See `docs/tracking_algo_report.docx` for the full visual report (scatter
-plot, heatmap, per-tracker bar chart, predicted-vs-actual) generated from
+See `docs/tracking_algo_report.docx` for the full visual report (ranked bar
+chart, heatmap, per-tracker bar chart, predicted-vs-actual) generated from
 this same scoring pipeline via `scripts/tracking_algo/visualize.py` +
 `scripts/tracking_algo/build_report.py`. An earlier report comparing
 `DEBOUNCE_FRAMES=4` vs `15` (the tuning work behind the value used above) is

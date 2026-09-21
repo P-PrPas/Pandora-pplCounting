@@ -101,8 +101,12 @@ def main():
     add_figure(doc, "scatter_pairs.png",
                "Figure 2. Signed IN vs. OUT count error per pair (color = "
                "tracker, shape = version); the gold star is ground truth, so "
-               "the closer to the star, the better. Everything sits in the "
-               "same direction (over-counts both IN and OUT); none under-count.")
+               "the closer to the star, the better. Nearly every pair "
+               "overcounts IN (boundary-dwell jitter, Section 3) but "
+               "undercounts OUT (lost tracks in clip1's dense, occluded "
+               "opening cluster) — McByte++ is the exception, its stronger "
+               "Re-ID keeps IDs alive through the dwell so it also "
+               "overcounts OUT slightly instead of losing them.")
     add_figure(doc, "predicted_vs_actual.png",
                "Figure 3. Predicted vs. true total crossings per clip per pair, "
                "against the y=x “perfect prediction” line. Points above the "

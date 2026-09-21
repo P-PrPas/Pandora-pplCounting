@@ -21,6 +21,7 @@ DPI = 160
 # Distinct marker per version, distinct color per tracker - standard paper-scatter idiom.
 MARKERS = {"v1": "o", "v2": "s", "v3": "^"}
 COLORS = {t: c for t, c in zip(TRACKERS, plt.cm.tab10.colors)}
+VERSION_COLORS = {v: c for v, c in zip(VERSIONS, plt.cm.Set2.colors)}
 DISPLAY = {"bytetrack": "ByteTrack", "botsort": "BoT-SORT", "ocsort": "OC-SORT",
            "deepocsort": "DeepOCSORT", "mcbyteplusplus": "McByte++"}
 
@@ -277,41 +278,49 @@ def heatmap_error(scored, out_dir=OUT_DIR):
 
 
 def bar_ranking(scored, out_dir=OUT_DIR):
-    """The bar is just the mean across v1/v2/v3 - on its own it can't show
-    whether that mean came from three similar values or (like McByte++) a
-    tight pair plus one outlier. So each version's individual error is
-    overlaid as its own marker (reusing the scatter's MARKERS/version legend)
-    directly on top of its bar, making that spread visible for free."""
+    """Overall tracker ranking, averaged across v1/v2/v3. Plain bars only -
+    the number in the label is the whole story, no per-version breakdown
+    needed here (see pair_ranking.png for that level of detail)."""
     tracker_avg = {t: np.mean([scored[(t, v)][0] for v in VERSIONS]) for t in TRACKERS}
     order = sorted(tracker_avg, key=tracker_avg.get)
     best = min(tracker_avg.values())
     edgecolors = ["gold" if tracker_avg[t] == best else "black" for t in order]
     linewidths = [2.5 if tracker_avg[t] == best else 0.7 for t in order]
 
-    fig, ax = plt.subplots(figsize=(7.6, 5.2))
-    x = np.arange(len(order))
-    bars = ax.bar(x, [tracker_avg[t] for t in order], color=[COLORS[t] for t in order],
-                  edgecolor=edgecolors, linewidth=linewidths, width=0.58,
-                  alpha=0.55, zorder=2)
-    ax.bar_label(bars, fmt="avg %.2f", padding=18, fontsize=9.5, fontweight="bold")
-    offsets = np.linspace(-0.15, 0.15, len(VERSIONS))  # fixed per-version offset, not random jitter
-    for i, t in enumerate(order):
-        for off, v in zip(offsets, VERSIONS):
-            err = scored[(t, v)][0]
-            ax.scatter(i + off, err, marker=MARKERS[v], color=COLORS[t], s=90,
-                       edgecolor="black", linewidth=0.8, zorder=3)
-    ax.set_xticks(x, [DISPLAY[t] for t in order])
-    ax.set_ylabel("Total error per version, with mean (bar)")
-    ax.set_title("Overall tracker ranking — lower is better\n"
-                 "bars = avg(v1, v2, v3)  ·  markers = each version's own error")
-    version_handles = [plt.Line2D([], [], marker=MARKERS[v], color="grey", linestyle="",
-                                   markersize=8, markeredgecolor="black", markeredgewidth=0.5,
-                                   label=v) for v in VERSIONS]
-    ax.legend(handles=version_handles, title="Version", loc="upper left")
-    ax.margins(y=0.16)
+    fig, ax = plt.subplots(figsize=(7.2, 4.8))
+    bars = ax.bar([DISPLAY[t] for t in order], [tracker_avg[t] for t in order],
+                  color=[COLORS[t] for t in order], edgecolor=edgecolors, linewidth=linewidths,
+                  width=0.6, zorder=3)
+    ax.bar_label(bars, fmt="%.2f", padding=4, fontsize=9.5, fontweight="bold")
+    ax.set_ylabel("Avg total error (v1/v2/v3)")
+    ax.set_title("Overall tracker ranking — lower is better")
+    ax.margins(y=0.14)
     ax.grid(axis="x", visible=False)
     fig.tight_layout()
     fig.savefig(out_dir / "bar_tracker_ranking.png", dpi=DPI)
+    plt.close(fig)
+
+
+def bar_version_ranking(scored, out_dir=OUT_DIR):
+    """Same idea as bar_tracker_ranking.png but averaged the other way:
+    one bar per logic version (v1/v2/v3), averaged across all 5 trackers."""
+    version_avg = {v: np.mean([scored[(t, v)][0] for t in TRACKERS]) for v in VERSIONS}
+    order = sorted(version_avg, key=version_avg.get)
+    best = min(version_avg.values())
+    edgecolors = ["gold" if version_avg[v] == best else "black" for v in order]
+    linewidths = [2.5 if version_avg[v] == best else 0.7 for v in order]
+
+    fig, ax = plt.subplots(figsize=(6, 4.8))
+    bars = ax.bar(order, [version_avg[v] for v in order],
+                  color=[VERSION_COLORS[v] for v in order], edgecolor=edgecolors,
+                  linewidth=linewidths, width=0.5, zorder=3)
+    ax.bar_label(bars, fmt="%.2f", padding=4, fontsize=9.5, fontweight="bold")
+    ax.set_ylabel("Avg total error (across all 5 trackers)")
+    ax.set_title("Overall logic-version ranking — lower is better")
+    ax.margins(y=0.14)
+    ax.grid(axis="x", visible=False)
+    fig.tight_layout()
+    fig.savefig(out_dir / "bar_version_ranking.png", dpi=DPI)
     plt.close(fig)
 
 
@@ -359,8 +368,9 @@ def main():
     scatter_pairs(gt, scored, args.out_dir)
     heatmap_error(scored, args.out_dir)
     bar_ranking(scored, args.out_dir)
+    bar_version_ranking(scored, args.out_dir)
     predicted_vs_actual(gt, scored, args.out_dir)
-    print(f"wrote 5 plots to {args.out_dir}")
+    print(f"wrote 6 plots to {args.out_dir}")
 
 
 if __name__ == "__main__":

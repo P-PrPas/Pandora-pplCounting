@@ -75,46 +75,165 @@ def bar_pairs_ranking(scored, out_dir=OUT_DIR):
     plt.close(fig)
 
 
-def scatter_pairs(gt, scored, out_dir=OUT_DIR):
-    """Classic research-paper scatter: signed IN-count error (x) vs. signed
-    OUT-count error (y) per tracker×version pair, color = tracker, marker
-    shape = version. The origin is ground truth - the closer to (0, 0), the
-    better. Color+marker together uniquely identify every point, the usual
-    paper idiom, so no per-point text labels are needed (that's what caused
-    the clutter/overlap in an earlier version of this plot)."""
-    fig, ax = plt.subplots(figsize=(7.2, 6.8))
-    xs, ys = [], []
-    for (t, v), (_, per_clip) in scored.items():
-        in_err = sum(per_clip[c][0] - gt[c][0] for c in CLIPS)
-        out_err = sum(per_clip[c][1] - gt[c][1] for c in CLIPS)
-        xs.append(in_err)
-        ys.append(out_err)
-        ax.scatter(in_err, out_err, color=COLORS[t], marker=MARKERS[v], s=140,
-                   edgecolor="black", linewidth=0.7, alpha=0.9, zorder=3)
+def _diamond_rings(ax, lim, step, fontsize=7.5, labels=True):
+    """Dashed L1-ball rings (|x|+|y|=r) centered on the origin - the project's
+    actual scoring metric (see docs/tracking_algo_ground_truth.md), so two
+    points on the same ring are exactly tied, no eyeballing required. Drawn
+    as a diamond rather than a circle because that's the shape of "equal
+    total count error" under this metric - a circle would visually favor
+    points that are closer on one axis even when their total error is worse."""
+    for r in range(step, int(np.ceil(lim / step)) * step + 1, step):
+        ax.plot([r, 0, -r, 0, r], [0, r, 0, -r, 0], "--", color="#bbbbbb",
+                 linewidth=1, zorder=1)
+        if labels:
+            # Labeled on the empty top-right diagonal (+x, +y) - every data
+            # point in this dataset sits in the lower-right/upper-left area,
+            # so this is the one spot on the ring guaranteed not to collide
+            # with a marker, the outlier text labels, or the legends.
+            ax.annotate(f"error={r}", (r / 2, r / 2), xytext=(4, 3),
+                        textcoords="offset points",
+                        fontsize=fontsize, color="#777777")
 
-    xpad, ypad = (max(xs) - min(xs)) * 0.15 + 1.5, (max(ys) - min(ys)) * 0.15 + 1.5
-    ax.axhline(0, color="#999999", linewidth=1, zorder=1)
-    ax.axvline(0, color="#999999", linewidth=1, zorder=1)
-    ax.scatter(0, 0, marker="*", s=420, color="gold", edgecolor="black",
-               linewidth=1, zorder=4, label="ground truth")
-    ax.set_xlim(min(0, min(xs)) - xpad, max(0, max(xs)) + xpad)
-    ax.set_ylim(min(0, min(ys)) - ypad, max(0, max(ys)) + ypad)
+
+def _plot_points(ax, pts, rank_start, best_l1, numbered):
+    """Draws each (in_err, out_err, l1, tracker, version) point. numbered=True
+    badges each point with its global rank (1=best); numbered=False draws a
+    plain marker only (used for the crowded cluster in the main view, which
+    gets its numbers in the zoomed inset instead)."""
+    for i, (in_err, out_err, l1, t, v) in enumerate(pts):
+        rank = rank_start + i
+        is_best = l1 == best_l1
+        ax.scatter(in_err, out_err, marker=MARKERS[v], color=COLORS[t],
+                   s=220 if is_best else 160,
+                   edgecolor="gold" if is_best else "black",
+                   linewidth=2.5 if is_best else 0.8, zorder=4)
+        if numbered:
+            ax.annotate(str(rank), (in_err, out_err), ha="center", va="center",
+                        fontsize=7.5, fontweight="bold", zorder=5,
+                        xytext=(9, 9), textcoords="offset points",
+                        bbox=dict(boxstyle="circle,pad=0.2", fc="white",
+                                  ec=COLORS[t], lw=1.2, alpha=0.97))
+
+
+def scatter_pairs(gt, scored, out_dir=OUT_DIR):
+    """One point per (tracker, version) pair, axes = signed count error
+    (predicted - true) per direction, summed over both clips. The origin is
+    ground truth itself.
+
+    The project's actual ranking metric is L1 (|IN error| + |OUT error|), not
+    Euclidean distance - a plain circular "closer = better" reading disagrees
+    with that metric on near-ties (one point closer on X, another closer on
+    Y, but equal total error - or, worse, a point that looks close because
+    it's near-zero on one axis while actually having a larger total error
+    than a point that looks farther away). So distance-from-star is drawn as
+    diamond-shaped L1 iso-error rings instead of a Euclidean circle: two
+    points on the same ring are *tied*, unambiguously, no eyeballing needed -
+    and a point one ring further out is worse, full stop, regardless of
+    which axis its error sits on.
+
+    Most pairs cluster tightly near the star while a couple of failure cases
+    (McByte++ v1/v2) sit far off - a single fixed-scale view would either
+    crush the competitive cluster into an unreadable knot or waste most of
+    the canvas on empty space. So the crowded cluster gets its own zoomed
+    inset with numbered points (cross-referenced to the ranking list on the
+    right); isolated outliers get a direct text label instead, since there's
+    room out there for one.
+    """
+    pts = []
+    for (t, v), (_, per_clip) in scored.items():
+        in_err = sum(per_clip[c][0] for c in CLIPS) - sum(gt[c][0] for c in CLIPS)
+        out_err = sum(per_clip[c][1] for c in CLIPS) - sum(gt[c][1] for c in CLIPS)
+        pts.append([in_err, out_err, abs(in_err) + abs(out_err), t, v])
+    pts.sort(key=lambda p: p[2])  # rank 1 = lowest L1 error = best
+
+    # ponytail: a couple of pairs land on the exact same (in_err, out_err) -
+    # nudge duplicates apart on a tiny circle so both markers stay visible.
+    seen = {}
+    for p in pts:
+        key = (p[0], p[1])
+        n = seen.setdefault(key, 0)
+        if n:
+            angle = n * 2.4
+            p[0] += 0.4 * np.cos(angle)
+            p[1] += 0.4 * np.sin(angle)
+        seen[key] += 1
+
+    best_l1 = pts[0][2]
+
+    # ponytail: split cluster vs. outliers at the single biggest gap in sorted
+    # L1 error - a simple elbow heuristic, good enough for a handful of
+    # points; revisit with real clustering if the pair count grows a lot.
+    l1s = [p[2] for p in pts]
+    gaps = [l1s[i + 1] - l1s[i] for i in range(len(l1s) - 1)]
+    split = gaps.index(max(gaps)) if gaps and max(gaps) > 2 * (np.median(gaps) or 1) else len(pts) - 1
+    cluster, outliers = pts[:split + 1], pts[split + 1:]
+
+    fig, ax = plt.subplots(figsize=(11.5, 7.8))
+    fig.subplots_adjust(right=0.7)
+
+    lim = max(abs(p[0]) for p in pts + [[0, 0]]) or 1
+    lim = max(lim, max(abs(p[1]) for p in pts)) * 1.2
+    _diamond_rings(ax, lim, step=4)
+    ax.axhline(0, color="#999999", linewidth=0.9, zorder=1)
+    ax.axvline(0, color="#999999", linewidth=0.9, zorder=1)
+    ax.scatter(0, 0, marker="*", color="gold", s=480, edgecolor="black",
+               linewidth=1, zorder=6)
+    _plot_points(ax, cluster, 1, best_l1, numbered=False)
+    _plot_points(ax, outliers, split + 2, best_l1, numbered=False)
+    for i, (in_err, out_err, l1, t, v) in enumerate(outliers):
+        ax.annotate(f"{DISPLAY[t]}/{v}  (error={l1})", (in_err, out_err), fontsize=9,
+                    fontweight="bold", xytext=(-8, 16 if i % 2 == 0 else -20),
+                    textcoords="offset points", ha="center")
+    ax.set_xlim(-lim, lim)
+    ax.set_ylim(-lim, lim)
+    ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("IN count error (predicted − true, summed over both clips)")
     ax.set_ylabel("OUT count error (predicted − true, summed over both clips)")
-    ax.set_title("Signed IN vs. OUT error, per tracker × version pair")
+    ax.set_title("Tracker × logic-version accuracy\n"
+                 "closer to ★ = better  ·  same dashed diamond = tied total error")
 
-    tracker_leg = _tracker_legend(ax, loc="upper left", bbox_to_anchor=(1.02, 1.0))
+    if outliers:
+        pad = 1.5
+        xs, ys = [p[0] for p in cluster], [p[1] for p in cluster]
+        x0, x1, y0, y1 = min(xs) - pad, max(xs) + pad, min(ys) - pad, max(ys) + pad
+        axins = ax.inset_axes([0.03, 0.5, 0.46, 0.46])
+        axins.set_xlim(x0, x1)
+        axins.set_ylim(y0, y1)
+        axins.set_aspect("equal", adjustable="box")
+        axins.grid(True, alpha=0.3, linestyle="--", linewidth=0.6)
+        inset_lim = max(abs(x0), abs(x1), abs(y0), abs(y1))
+        _diamond_rings(axins, inset_lim, step=2, fontsize=7)
+        if x0 <= 0 <= x1 and y0 <= 0 <= y1:
+            axins.scatter(0, 0, marker="*", color="gold", s=220, edgecolor="black", zorder=6)
+        _plot_points(axins, cluster, 1, best_l1, numbered=True)
+        axins.set_xticks([])
+        axins.set_yticks([])
+        axins.set_title("cluster detail (zoomed)", fontsize=9, fontweight="bold")
+        ax.indicate_inset_zoom(axins, edgecolor="black")
+
+    tracker_leg = _tracker_legend(ax, loc="lower left")
     ax.add_artist(tracker_leg)
     version_handles = [plt.Line2D([], [], marker=MARKERS[v], color="grey", linestyle="",
                                    markersize=9, markeredgecolor="black", markeredgewidth=0.5,
-                                   label=v) for v in VERSIONS] + \
-        [plt.Line2D([], [], marker="*", color="gold", linestyle="", markersize=14,
-                    markeredgecolor="black", label="ground truth")]
-    ax.legend(handles=version_handles, title="Version", loc="upper left",
-              bbox_to_anchor=(1.02, 0.5))
-    fig.tight_layout()
-    fig.savefig(out_dir / "scatter_pairs.png", dpi=DPI, bbox_inches="tight")
+                                   label=v) for v in VERSIONS]
+    ax.legend(handles=version_handles, title="Version", loc="lower right")
+
+    lines = ["Ranking (total error)", "─" * 26]
+    for rank, (_, _, l1, t, v) in enumerate(pts, start=1):
+        lines.append(f"{rank:>2}. {DISPLAY[t]}/{v}  ({l1})")
+    fig.text(0.72, 0.9, "\n".join(lines), va="top", ha="left",
+              family="monospace", fontsize=9,
+              bbox=dict(boxstyle="round,pad=0.5", fc="#f7f7f7", ec="#999999", lw=0.8))
+    fig.text(0.72, 0.06,
+              "Note: distance from ★ is total count error\n"
+              "(|IN error| + |OUT error|) - the same number\n"
+              "used to rank every pair, not straight-line\n"
+              "distance. That's why the rings are diamonds,\n"
+              "not circles.",
+              va="bottom", ha="left", fontsize=8.5, color="#555555", style="italic")
+    fig.savefig(out_dir / "scatter_pairs.png", dpi=DPI)
     plt.close(fig)
+
 
 
 def heatmap_error(scored, out_dir=OUT_DIR):

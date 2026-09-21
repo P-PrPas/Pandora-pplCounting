@@ -100,8 +100,14 @@ def main():
                "bars with equal printed numbers are exact ties.")
     add_figure(doc, "scatter_pairs.png",
                "Figure 2. Signed IN vs. OUT count error per pair (color = "
-               "tracker, shape = version); the gold star is ground truth, so "
-               "the closer to the star, the better. Nearly every pair "
+               "tracker, shape = version); the gold star is ground truth. "
+               "Distance from the star is drawn as dashed diamonds, not "
+               "circles, because the ranking metric is total count error "
+               "(|IN error| + |OUT error|) — points on the same diamond are "
+               "exact ties regardless of which axis their error sits on. The "
+               "13 competitive pairs are zoomed into the inset (numbered by "
+               "rank, cross-referenced to the list on the right); McByte++ "
+               "v1/v2 are the two labeled outliers. Nearly every pair "
                "overcounts IN (boundary-dwell jitter, Section 3) but "
                "undercounts OUT (lost tracks in clip1's dense, occluded "
                "opening cluster) — McByte++ is the exception, its stronger "

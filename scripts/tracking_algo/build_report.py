@@ -119,10 +119,16 @@ def main():
                "line overcount; McByte++ overcounts most on the busy clip.")
     add_figure(doc, "heatmap_error.png",
                "Figure 4. Total absolute error (both clips combined) for every "
-               "tracker×version combination. Greener = closer to ground truth.")
+               "tracker×version combination; rows and columns sorted best-average"
+               "-first, so the best combinations cluster top-left. Greener = "
+               "closer to ground truth; the gold outline marks the overall best "
+               "cell(s).")
     add_figure(doc, "bar_tracker_ranking.png",
-               "Figure 5. Overall tracker ranking: average total error across "
-               "v1/v2/v3.")
+               "Figure 5. Overall tracker ranking: bar height is the average "
+               "total error across v1/v2/v3, gold-outlined for the best; the "
+               "three markers on top of each bar are that version's own error, "
+               "showing whether the average hides a spread (as for McByte++'s "
+               "v1/v2 vs. v3) or reflects three similar results.")
 
     doc.add_heading("5. Rankings", level=1)
     doc.add_heading("5.1 Overall tracker ranking (avg error across v1/v2/v3)", level=2)

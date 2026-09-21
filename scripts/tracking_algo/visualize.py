@@ -54,7 +54,7 @@ def bar_pairs_ranking(scored, out_dir=OUT_DIR):
     the way a signed-error scatter alone would require."""
     pts = sorted(((err, t, v) for (t, v), (err, _) in scored.items()), key=lambda p: p[0])
     best = pts[0][0]
-    labels = [f"{DISPLAY[t]} / {v}" for _, t, v in pts]
+    labels = [f"{i}.  {DISPLAY[t]} / {v}" for i, (_, t, v) in enumerate(pts, start=1)]
     errors = [e for e, _, _ in pts]
     colors = [COLORS[t] for _, t, _ in pts]
     edgecolors = ["gold" if e == best else "black" for e in errors]
@@ -62,6 +62,8 @@ def bar_pairs_ranking(scored, out_dir=OUT_DIR):
 
     fig, ax = plt.subplots(figsize=(8.5, 7.2))
     y = np.arange(len(pts))[::-1]  # rank 1 at the top
+    for row in y[::2]:  # zebra striping - easier to trace a row across 15 of them
+        ax.axhspan(row - 0.5, row + 0.5, color="#f2f2f2", zorder=0)
     bars = ax.barh(y, errors, color=colors, edgecolor=edgecolors, linewidth=linewidths,
                    height=0.72, zorder=3)
     ax.bar_label(bars, fmt="%d", padding=5, fontsize=9.5, fontweight="bold")
@@ -69,6 +71,7 @@ def bar_pairs_ranking(scored, out_dir=OUT_DIR):
     ax.set_xlabel("Total count error (|IN error| + |OUT error|, both clips) — lower is better")
     ax.set_title("Tracker × Version, ranked by total error")
     ax.margins(x=0.09)
+    ax.set_ylim(y.min() - 0.5, y.max() + 0.5)
     ax.grid(axis="y", visible=False)
     fig.tight_layout()
     fig.savefig(out_dir / "pair_ranking.png", dpi=DPI)
@@ -237,19 +240,36 @@ def scatter_pairs(gt, scored, out_dir=OUT_DIR):
 
 
 def heatmap_error(scored, out_dir=OUT_DIR):
-    grid = np.array([[scored[(t, v)][0] for v in VERSIONS] for t in TRACKERS])
+    """Rows/columns sorted best-average-first (not alphabetical/fixed order)
+    so the best tracker and best version are simply top-left - the reader
+    doesn't have to cross-reference a separate ranking table to see it."""
+    trackers = sorted(TRACKERS, key=lambda t: np.mean([scored[(t, v)][0] for v in VERSIONS]))
+    versions = sorted(VERSIONS, key=lambda v: np.mean([scored[(t, v)][0] for t in TRACKERS]))
+    grid = np.array([[scored[(t, v)][0] for v in versions] for t in trackers])
+    best = grid.min()
+
     fig, ax = plt.subplots(figsize=(5.8, 5.3))
     ax.grid(False)  # grid lines make no sense over a cell heatmap
     im = ax.imshow(grid, cmap="RdYlGn_r")
-    ax.set_xticks(range(len(VERSIONS)), VERSIONS)
-    ax.set_yticks(range(len(TRACKERS)), [DISPLAY[t] for t in TRACKERS])
-    for i in range(len(TRACKERS)):
-        for j in range(len(VERSIONS)):
+    ax.set_xticks(range(len(versions)), versions)
+    ax.set_yticks(range(len(trackers)), [DISPLAY[t] for t in trackers])
+    # Thin white separators between cells - without them, same-ish shades of
+    # green blend into their neighbors and the grid reads as one blob.
+    ax.set_xticks(np.arange(-0.5, len(versions)), minor=True)
+    ax.set_yticks(np.arange(-0.5, len(trackers)), minor=True)
+    ax.grid(which="minor", color="white", linewidth=2)
+    ax.tick_params(which="minor", length=0)
+    for i in range(len(trackers)):
+        for j in range(len(versions)):
             # Light text on the darkest (worst) cells stays readable on dark red.
             txt_color = "white" if grid[i, j] >= grid.max() * 0.75 else "black"
             ax.text(j, i, grid[i, j], ha="center", va="center", fontsize=12,
                     fontweight="bold", color=txt_color)
-    ax.set_title("Total error (both clips) — lower is better")
+            if grid[i, j] == best:
+                ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, fill=False,
+                                           edgecolor="gold", linewidth=3, zorder=5))
+    ax.set_title("Total error (both clips) — lower is better\n"
+                 "sorted best → worst, top-left to bottom-right")
     fig.colorbar(im, ax=ax, label="Total absolute error", shrink=0.85)
     fig.tight_layout()
     fig.savefig(out_dir / "heatmap_error.png", dpi=DPI)
@@ -257,16 +277,38 @@ def heatmap_error(scored, out_dir=OUT_DIR):
 
 
 def bar_ranking(scored, out_dir=OUT_DIR):
+    """The bar is just the mean across v1/v2/v3 - on its own it can't show
+    whether that mean came from three similar values or (like McByte++) a
+    tight pair plus one outlier. So each version's individual error is
+    overlaid as its own marker (reusing the scatter's MARKERS/version legend)
+    directly on top of its bar, making that spread visible for free."""
     tracker_avg = {t: np.mean([scored[(t, v)][0] for v in VERSIONS]) for t in TRACKERS}
     order = sorted(tracker_avg, key=tracker_avg.get)
-    fig, ax = plt.subplots(figsize=(7.2, 4.8))
-    bars = ax.bar([DISPLAY[t] for t in order], [tracker_avg[t] for t in order],
-                  color=[COLORS[t] for t in order], edgecolor="black", linewidth=0.7,
-                  width=0.62, zorder=3)
-    ax.bar_label(bars, fmt="%.2f", padding=4, fontsize=9.5, fontweight="bold")
-    ax.set_ylabel("Avg total error (v1/v2/v3)")
-    ax.set_title("Overall tracker ranking — lower is better")
-    ax.margins(y=0.14)
+    best = min(tracker_avg.values())
+    edgecolors = ["gold" if tracker_avg[t] == best else "black" for t in order]
+    linewidths = [2.5 if tracker_avg[t] == best else 0.7 for t in order]
+
+    fig, ax = plt.subplots(figsize=(7.6, 5.2))
+    x = np.arange(len(order))
+    bars = ax.bar(x, [tracker_avg[t] for t in order], color=[COLORS[t] for t in order],
+                  edgecolor=edgecolors, linewidth=linewidths, width=0.58,
+                  alpha=0.55, zorder=2)
+    ax.bar_label(bars, fmt="avg %.2f", padding=18, fontsize=9.5, fontweight="bold")
+    offsets = np.linspace(-0.15, 0.15, len(VERSIONS))  # fixed per-version offset, not random jitter
+    for i, t in enumerate(order):
+        for off, v in zip(offsets, VERSIONS):
+            err = scored[(t, v)][0]
+            ax.scatter(i + off, err, marker=MARKERS[v], color=COLORS[t], s=90,
+                       edgecolor="black", linewidth=0.8, zorder=3)
+    ax.set_xticks(x, [DISPLAY[t] for t in order])
+    ax.set_ylabel("Total error per version, with mean (bar)")
+    ax.set_title("Overall tracker ranking — lower is better\n"
+                 "bars = avg(v1, v2, v3)  ·  markers = each version's own error")
+    version_handles = [plt.Line2D([], [], marker=MARKERS[v], color="grey", linestyle="",
+                                   markersize=8, markeredgecolor="black", markeredgewidth=0.5,
+                                   label=v) for v in VERSIONS]
+    ax.legend(handles=version_handles, title="Version", loc="upper left")
+    ax.margins(y=0.16)
     ax.grid(axis="x", visible=False)
     fig.tight_layout()
     fig.savefig(out_dir / "bar_tracker_ranking.png", dpi=DPI)
@@ -289,6 +331,9 @@ def predicted_vs_actual(gt, scored, out_dir=OUT_DIR):
     lo, hi = min(truths) - 2, max(truths + preds) + 2
     ax.plot([lo, hi], [lo, hi], "--", color="#888888", linewidth=1.3, zorder=2,
             label="perfect prediction")
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+    ax.set_aspect("equal", adjustable="box")  # equal axes = the y=x line is visually 45°, not skewed
     ax.set_xlabel("True total crossings (ground truth)")
     ax.set_ylabel("Predicted total crossings")
     ax.set_title("Predicted vs. actual crossings, per clip per pair")

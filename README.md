@@ -1,14 +1,16 @@
 <div align="center">
 
-![Pandora: computer vision for doorway people counting](assets/readme/banner.svg)
-
 # Doorway People Counter
 
 **A proof of concept for counting people entering and leaving through a doorway.**
 
-`LIVE RTSP` &nbsp; · &nbsp; `OFFLINE VIDEO` &nbsp; · &nbsp; `THREE TRACKING APPROACHES`
+[![Python](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Ultralytics](https://img.shields.io/badge/Ultralytics-YOLO-334155)](https://docs.ultralytics.com/)
+[![OpenCV](https://img.shields.io/badge/OpenCV-vision-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
+[![PySide6](https://img.shields.io/badge/Qt-PySide6-217346?logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
+[![NumPy](https://img.shields.io/badge/NumPy-array%20computing-4D77A5?logo=numpy&logoColor=white)](https://numpy.org/)
 
-[Get started](#getting-started) · [Live app](#live-desktop-app) · [Offline processing](#offline-video-processing) · [Documentation](#documentation)
+[Get started](#getting-started) · [Live app](#live-desktop-app) · [Offline processing](#offline-video-processing) · [Documentation](#go-deeper)
 
 </div>
 

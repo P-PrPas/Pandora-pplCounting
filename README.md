@@ -1,10 +1,12 @@
 <div align="center">
 
-# Pandora · Doorway People Counter
+![Pandora: computer vision for doorway people counting](assets/readme/banner.svg)
+
+# Doorway People Counter
 
 **A proof of concept for counting people entering and leaving through a doorway.**
 
-Live RTSP monitoring · Offline video analysis · Three tracking approaches
+`LIVE RTSP` &nbsp; · &nbsp; `OFFLINE VIDEO` &nbsp; · &nbsp; `THREE TRACKING APPROACHES`
 
 [Get started](#getting-started) · [Live app](#live-desktop-app) · [Offline processing](#offline-video-processing) · [Documentation](#documentation)
 
@@ -12,9 +14,11 @@ Live RTSP monitoring · Offline video analysis · Three tracking approaches
 
 ---
 
-## Overview
+## At a glance
 
 Pandora detects and tracks people crossing two configured doorway zones. A transition from the outside zone (A) to the inside zone (B) counts as **IN**; the reverse counts as **OUT**. The desktop app displays live counts, while the offline pipelines produce annotated video and a CSV event log.
+
+**Choose a tracking approach**
 
 | Logic | Tracking point | Models | Calibration |
 | --- | --- | --- | --- |
@@ -22,7 +26,10 @@ Pandora detects and tracks people crossing two configured doorway zones. A trans
 | V2 | Midpoint of shoulder keypoints (neck) | YOLO11 pose | Foot-to-neck offset |
 | V3 | Head detection | Head detector and YOLO11 person detector | Foot-to-head offset |
 
-V3 uses person detections to filter head detections. All three use tracking and a shared zone-crossing counter. This is a camera-specific proof of concept: validate accuracy on your own footage and conditions before operational use.
+V3 uses person detections to filter head detections. All three use tracking and a shared zone-crossing counter.
+
+> [!IMPORTANT]
+> This is a camera-specific proof of concept. Validate accuracy on your own footage and conditions before operational use.
 
 ## Getting started
 
@@ -52,6 +59,8 @@ The V3 checkpoint is a third-party YOLOv8n model trained on SCUT-HEAD. Obtain th
 
 ## Live desktop app
 
+**Configure → draw zones → calibrate → count**
+
 1. Copy the example configuration and set your camera URL:
 
    ```bash
@@ -68,7 +77,8 @@ The app stores zones in `app/zones.json` and calibration samples in `app/calibra
 
 ## Offline video processing
 
-The offline scripts use the fixed-camera `ZONE_A` and `ZONE_B` coordinates in `scripts/v1/people_counter.py`, **not** the zones drawn in the desktop app. Adjust those polygons for the camera before processing, and recalibrate V2/V3 after changing the camera view or zones. Use representative reference clips with people walking through the doorway.
+> [!NOTE]
+> The offline scripts use the fixed-camera `ZONE_A` and `ZONE_B` coordinates in `scripts/v1/people_counter.py`, **not** the zones drawn in the desktop app. Adjust those polygons for the camera before processing, and recalibrate V2/V3 after changing the camera view or zones. > Use representative reference clips with people walking through the doorway.
 
 ```bash
 mkdir -p data/results/v1 data/results/v2 data/results/v3
@@ -121,8 +131,14 @@ The tracker comparison tools are research tooling, separate from the live app. T
 - **Poor counts:** Check the zone placement, camera framing, occlusion, lighting, and calibration samples. Recalibrate after camera changes and compare against manually counted footage.
 - **Cannot create output video:** Create the output directory and check write permissions and codec support.
 
-## Documentation
+## Go deeper
 
-- [Evaluation and proposed improvements](docs/REPORT.md)
-- [Presentation and rendering notes](docs/PRESENTATION.md)
-- [Tracker comparison ground truth](docs/tracking_algo_ground_truth.md)
+| Document | What you will find |
+| --- | --- |
+| [Evaluation report](docs/REPORT.md) | Results, edge cases, and proposed improvements |
+| [Presentation notes](docs/PRESENTATION.md) | Video rendering and export details |
+| [Tracker comparison](docs/tracking_algo_ground_truth.md) | Ground truth for the research tools |
+
+---
+
+<div align="center"><sub>Built for understanding movement through a doorway.</sub></div>

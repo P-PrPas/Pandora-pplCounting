@@ -1,24 +1,34 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" role="img" aria-labelledby="title desc">
-  <title id="title">Pandora doorway people counter</title>
-  <desc id="desc">A doorway with two crossing zones and tracked paths, illustrating people counting.</desc>
-  <defs>
-    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101b35"/><stop offset="1" stop-color="#172c47"/></linearGradient>
-    <linearGradient id="line" x2="1" y2="0"><stop stop-color="#61d8cd"/><stop offset="1" stop-color="#779cff"/></linearGradient>
-  </defs>
-  <rect width="1200" height="340" rx="20" fill="url(#bg)"/>
-  <path d="M0 270H1200M0 180H1200M0 90H1200M150 0V340M300 0V340M450 0V340M600 0V340M750 0V340M900 0V340M1050 0V340" stroke="#fff" stroke-opacity=".035"/>
-  <text x="70" y="102" fill="#71ded3" font-family="Arial,sans-serif" font-size="15" font-weight="bold" letter-spacing="4">COMPUTER VISION / PEOPLE COUNTING</text>
-  <text x="70" y="170" fill="#fff" font-family="Arial,sans-serif" font-size="58" font-weight="bold" letter-spacing="2">PANDORA</text>
-  <text x="72" y="211" fill="#bdcce0" font-family="Arial,sans-serif" font-size="22">See movement. Understand flow.</text>
-  <path d="M72 250h215" stroke="url(#line)" stroke-width="4" stroke-linecap="round"/>
-  <g transform="translate(780 35)">
-    <path d="M45 205 188 260 335 205 190 157Z" fill="#5de0cf" fill-opacity=".15" stroke="#70e4d7" stroke-opacity=".7" stroke-width="2"/>
-    <path d="M45 205 45 105 190 50 335 105 335 205" fill="none" stroke="#8ba9cf" stroke-opacity=".45" stroke-width="2"/>
-    <path d="M190 50v107M45 105l145 52 145-52" fill="none" stroke="#8ba9cf" stroke-opacity=".35" stroke-width="2"/>
-    <path d="M126 218c18-34 44-55 74-79" fill="none" stroke="#74e3d7" stroke-width="3" stroke-dasharray="7 8"/>
-    <path d="m190 140 12-4-3 13" fill="none" stroke="#74e3d7" stroke-width="3"/>
-    <circle cx="126" cy="218" r="7" fill="#74e3d7"/><circle cx="200" cy="139" r="7" fill="#91adff"/>
-    <text x="72" y="196" fill="#b9e9e5" font-family="Arial,sans-serif" font-size="14" font-weight="bold">ZONE A</text>
-    <text x="240" y="194" fill="#c4d0ff" font-family="Arial,sans-serif" font-size="14" font-weight="bold">ZONE B</text>
+  <title id="title">Pandora — doorway people counter</title>
+  <desc id="desc">An illustrated overhead camera observes two people walking through a doorway.</desc>
+  <rect width="1200" height="340" rx="16" fill="#f3f0e8"/>
+  <path d="M0 285H1200" stroke="#d6d2c7" stroke-width="2"/>
+  <text x="72" y="92" fill="#55736d" font-family="Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="3">DOORWAY PEOPLE COUNTER</text>
+  <text x="68" y="160" fill="#283d43" font-family="Georgia, serif" font-size="67" font-weight="700">Pandora</text>
+  <path d="M73 184h64" stroke="#bd765c" stroke-width="4" stroke-linecap="round"/>
+  <text x="72" y="224" fill="#536365" font-family="Arial, sans-serif" font-size="20">A clearer picture of people moving</text>
+  <text x="72" y="253" fill="#536365" font-family="Arial, sans-serif" font-size="20">through a shared space.</text>
+  <!-- Doorway, floor and camera -->
+  <path d="M724 286V80q0-10 10-10h276q10 0 10 10v206" fill="#e4e8e1" stroke="#405a5a" stroke-width="4"/>
+  <path d="M746 286V96h252v190" fill="#d5ded7" stroke="#405a5a" stroke-width="3"/>
+  <path d="M872 97v189" stroke="#bacbc1" stroke-width="3"/>
+  <path d="M680 286h384" stroke="#405a5a" stroke-width="4" stroke-linecap="round"/>
+  <path d="M838 70V45h68v25" fill="#eee9dd" stroke="#405a5a" stroke-width="3"/>
+  <rect x="846" y="39" width="52" height="25" rx="8" fill="#405a5a"/>
+  <circle cx="872" cy="51" r="6" fill="#c5dcd2"/>
+  <path d="M859 64 794 228M885 64l65 164" stroke="#819d91" stroke-width="2" stroke-dasharray="6 7"/>
+  <!-- Two people in a restrained editorial illustration style -->
+  <g stroke="#405052" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M803 252l-10 34m25-34 13 34" fill="none" stroke-width="8"/>
+    <path d="M793 179q13-12 28 0l11 58q-17 10-37 0z" fill="#c68165"/>
+    <path d="m795 188-13 32m40-32 14 25" fill="none" stroke-width="7"/>
+    <circle cx="807" cy="160" r="15" fill="#e9b99c"/>
+    <path d="M792 158q1-20 16-19 15 0 15 17-12 0-18-8-4 8-13 10z" fill="#405052" stroke-width="2"/>
+    <path d="M927 250l-9 36m25-36 12 36" fill="none" stroke-width="8"/>
+    <path d="M915 177q13-11 28 0l10 61q-19 9-39 0z" fill="#77968b"/>
+    <path d="m916 189-13 30m40-30 12 29" fill="none" stroke-width="7"/>
+    <circle cx="929" cy="157" r="15" fill="#d7a483"/>
+    <path d="M914 154q0-18 15-18t16 18q-15-3-21-9-3 7-10 9z" fill="#405052" stroke-width="2"/>
   </g>
+  <path d="M765 270h67m80 0h67" stroke="#fff" stroke-opacity=".8" stroke-width="3" stroke-linecap="round"/>
 </svg>

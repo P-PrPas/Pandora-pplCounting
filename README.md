@@ -1,98 +1,128 @@
-# Doorway People Counter — POC
+<div align="center">
 
-Automated in/out people counting at a checkpoint doorway: YOLO11 + ByteTrack,
-foot-point tracking, dual-zone crossing detection, and a customer-facing
-annotated video with live counts.
+# Pandora · Doorway People Counter
 
-## Layout
+**A proof of concept for counting people entering and leaving through a doorway.**
 
-- `scripts/v1/` — the original batch pipeline. `people_counter.py` (detection, tracking,
-  counting), `presentation.py` (video rendering), and `counting.py`
-  (`ZoneCounter` state machine + zone classification — the shared core also
-  used by `app/`), plus local config/weights (`bytetrack_custom.yaml`,
-  `yolo11s.pt`). Tracks people by foot point (bbox bottom-center).
-- `scripts/v2/` — head-tracked variant: same detection+tracking, but classifies
-  by neck point (midpoint of the shoulder keypoints from a YOLO-pose model)
-  instead of the foot point. The zone polygons are still drawn by the user at
-  foot level; a one-time offline calibration step (`calibrate_zones.py`)
-  measures this camera's real foot→neck offset from reference footage and
-  shifts the zones to head level, caching the result to a JSON file. The
-  runtime script (`people_counter_v2.py`) just loads that file and runs a
-  single tracking pass — no whole-clip pre-scan, so it also works against a
-  live/RTSP source, not just a finished recording. The annotated output
-  shows both the user-drawn (foot) and calibrated (head) polygons.
-- `scripts/v3/` — head-detected variant: instead of inferring a head-level
-  point from a foot detection (v1) or a pose model's neck point (v2), this
-  runs a dedicated head detector (`head_detector.pt`, a pretrained YOLOv8n
-  checkpoint trained on SCUT-HEAD by a third party — no training done here)
-  and tracks its boxes directly. Same "draw zones at foot level, calibrate
-  once, run against head-level zones" split as v2 (`calibrate_zones_v3.py` /
-  `people_counter_v3.py`), except the foot→head offset is measured by
-  pairing v1's person detector with this head detector on the same frames
-  (`head_calibration_v3.py`), since a plain head detector never observes a
-  foot and a head together in one detection the way a pose model does.
-  Reuses v2's per-vertex IDW interpolation unchanged — same fix that keeps
-  adjacent zones from overlapping after the shift. Also runs v1's person
-  detector every frame at runtime as a filter: a detected "head" only counts
-  if a person box sits under it, which is what actually excludes a known
-  false-positive hotspot (a static wall sign this model confidently misreads
-  as a head) instead of a hardcoded per-camera pixel region — see
-  `head_tracker_v3.py`.
-- `app/` — live desktop POC (PySide6). Draw the Enter/Exit zones on a camera
-  snapshot, then run real-time detection/tracking/counting against an RTSP
-  stream. See "Live desktop app" below.
-- `tests/` — self-checks for the counting state machine and the renderer.
-  No video or model download required; run directly with `python3`.
-- `docs/` — `REPORT.md` (results + edge-case evaluation + proposed
-  enhancements) and `PRESENTATION.md` (render/output notes).
-- `assets/` — bundled fonts used by the renderer.
-- `data/` — not tracked upstream; local working directory.
-  - `dataset/` — raw source clips.
-  - `results/v<N>/` — rendered outputs for a given pipeline version (current: `v1`).
+Live RTSP monitoring · Offline video analysis · Three tracking approaches
 
-## Quickstart
+[Get started](#getting-started) · [Live app](#live-desktop-app) · [Offline processing](#offline-video-processing) · [Documentation](#documentation)
 
-Run everything from the repo root:
+</div>
+
+---
+
+## Overview
+
+Pandora detects and tracks people crossing two configured doorway zones. A transition from the outside zone (A) to the inside zone (B) counts as **IN**; the reverse counts as **OUT**. The desktop app displays live counts, while the offline pipelines produce annotated video and a CSV event log.
+
+| Logic | Tracking point | Models | Calibration |
+| --- | --- | --- | --- |
+| V1 | Person bounding box, bottom center (foot) | YOLO11 person detector | Draw foot-level zones |
+| V2 | Midpoint of shoulder keypoints (neck) | YOLO11 pose | Foot-to-neck offset |
+| V3 | Head detection | Head detector and YOLO11 person detector | Foot-to-head offset |
+
+V3 uses person detections to filter head detections. All three use tracking and a shared zone-crossing counter. This is a camera-specific proof of concept: validate accuracy on your own footage and conditions before operational use.
+
+## Getting started
+
+### Requirements
+
+- Python 3, a graphical desktop for the PySide6 app, and access to an RTSP camera for live use.
+- The model checkpoints at the paths below. Checkpoint availability and licensing should be verified before deployment.
+- A virtual environment is recommended. GPU acceleration is optional; inference can run on CPU.
 
 ```bash
-python3 tests/test_zone_counter.py
-python3 tests/test_presentation.py
-python3 tests/test_v2_head_calibration.py
-python3 scripts/v1/people_counter.py data/dataset/<clip>.mp4 data/results/v1/<output_prefix>
-
-# v2 (head-tracked): calibrate once per camera, then run
-python3 scripts/v2/calibrate_zones.py scripts/v2/zones_head.json data/dataset/<clip1>.mp4 [<clip2>.mp4 ...]
-python3 scripts/v2/people_counter_v2.py scripts/v2/zones_head.json data/dataset/<clip>.mp4 data/results/v2/<output_prefix>
-
-# v3 (head-detected): calibrate once per camera, then run
-python3 scripts/v3/calibrate_zones_v3.py scripts/v3/zones_head_v3.json data/dataset/<clip1>.mp4 [<clip2>.mp4 ...]
-python3 scripts/v3/people_counter_v3.py scripts/v3/zones_head_v3.json data/dataset/<clip>.mp4 data/results/v3/<output_prefix>
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r app/requirements.txt
 ```
 
-See `docs/REPORT.md` for results and `docs/PRESENTATION.md` for render/export
-details.
+On Windows, activate the environment with `.venv\Scripts\activate` instead. Run the following commands from the repository root.
 
-### Live desktop app
+### Model files
+
+| File | Used by |
+| --- | --- |
+| `scripts/v1/yolo11s.pt` | V1 and V3 person detection |
+| `scripts/v2/yolo11s-pose.pt` | V2 pose detection and calibration |
+| `scripts/v3/head_detector.pt` | V3 head detection and calibration |
+
+The V3 checkpoint is a third-party YOLOv8n model trained on SCUT-HEAD. Obtain the appropriate checkpoints and place them at these paths if they are absent. The application does not train models.
+
+## Live desktop app
+
+1. Copy the example configuration and set your camera URL:
+
+   ```bash
+   cp .env.example .env
+   # Edit .env and set RTSP_URL=rtsp://user:password@host:554/path
+   python app/main.py
+   ```
+
+2. On the camera snapshot, draw the Enter zone and select **Finish zone**; repeat for the Exit zone. Select **Continue**.
+3. Choose a **Logic** preset. For V2 or V3, select **Calibrate** and let people walk through the frame while samples are collected (approximately 20–30 seconds).
+4. Select **Start Live Count**. Recalibrate after moving the camera or changing its view.
+
+The app stores zones in `app/zones.json` and calibration samples in `app/calibration_samples.json`. Calibration is associated with the camera source and logic; V2 and V3 samples are separate. These files and `.env` are ignored by Git. Treat them as sensitive: camera URLs can contain credentials. A changed source or camera geometry requires checking the saved setup.
+
+## Offline video processing
+
+The offline scripts use the fixed-camera `ZONE_A` and `ZONE_B` coordinates in `scripts/v1/people_counter.py`, **not** the zones drawn in the desktop app. Adjust those polygons for the camera before processing, and recalibrate V2/V3 after changing the camera view or zones. Use representative reference clips with people walking through the doorway.
 
 ```bash
-pip install --break-system-packages -r app/requirements.txt
-cp .env.example .env   # set RTSP_URL to your camera stream
-python3 app/main.py
+mkdir -p data/results/v1 data/results/v2 data/results/v3
+
+# V1: foot tracking
+python scripts/v1/people_counter.py data/dataset/clip.mp4 data/results/v1/output
+
+# V2: calibrate, then count
+python scripts/v2/calibrate_zones.py scripts/v2/zones_head.json data/dataset/clip.mp4
+python scripts/v2/people_counter_v2.py scripts/v2/zones_head.json data/dataset/clip.mp4 data/results/v2/output
+
+# V3: calibrate, then count
+python scripts/v3/calibrate_zones_v3.py scripts/v3/zones_head_v3.json data/dataset/clip.mp4
+python scripts/v3/people_counter_v3.py scripts/v3/zones_head_v3.json data/dataset/clip.mp4 data/results/v3/output
 ```
 
-Draw the Enter zone (click points, "Finish zone"), then the Exit zone, then
-"Continue" and "Start Live Count". Zones are cached to `app/zones.json` per
-RTSP source so a relaunch against the same camera skips redrawing.
+Calibration accepts additional reference clips after the first. Each counting run writes `<output_prefix>.mp4` and `<output_prefix>.csv`; the CSV columns are `time_s`, `frame`, `track_id`, and `direction`. Input footage and generated results under `data/` are local and ignored by Git.
 
-On the run page, pick a **Logic** preset — V1 (foot tracking), V2 (head
-tracking), or V3 (head detection) — before starting. V2/V3 each need a
-one-time-per-camera calibration: click "Calibrate" and let it sample
-~20-30s of the live stream (people actually walking through frame), then
-"Start Live Count" unlocks. Calibration samples are cached to
-`app/calibration_samples.json` per RTSP source and logic (V2's neck offset
-and V3's head offset aren't interchangeable, so switching presets on the
-same camera doesn't require redoing the other's calibration), so redrawing
-zones or relaunching against the same camera doesn't require recalibrating
-— only a new camera or an explicit "Recalibrate" does. V3 also runs a
-second model (the person detector) every frame, both during calibration and
-live counting, for its overlap filter — see `scripts/v3/`.
+## Verification
+
+Run the lightweight checks from the repository root:
+
+```bash
+python tests/test_zone_counter.py
+python tests/test_presentation.py
+python tests/test_v2_head_calibration.py
+```
+
+These checks do not replace validation with the intended camera, lighting, traffic, and hardware. Inference selects an available device automatically; set `DEVICE` to override it if needed.
+
+## Project layout
+
+```text
+app/                    PySide6 live application and calibration storage
+scripts/v1/             Foot tracking, counting, and presentation
+scripts/v2/             Pose-based neck tracking and calibration
+scripts/v3/             Head detection and calibration
+scripts/tracking_algo/  Offline tracker comparison and reporting tools
+tests/                  Counting, presentation, and calibration checks
+docs/                   Evaluation, presentation notes, and reports
+assets/fonts/           Fonts used by the video renderer
+```
+
+The tracker comparison tools are research tooling, separate from the live app. Their additional dependencies are listed in `scripts/tracking_algo/requirements.txt`.
+
+## Troubleshooting
+
+- **Missing configuration or unreachable camera:** Check `RTSP_URL`, camera connectivity, and credentials; restart the app after updating `.env`.
+- **Missing model:** Check the checkpoint paths above and obtain the required files.
+- **Poor counts:** Check the zone placement, camera framing, occlusion, lighting, and calibration samples. Recalibrate after camera changes and compare against manually counted footage.
+- **Cannot create output video:** Create the output directory and check write permissions and codec support.
+
+## Documentation
+
+- [Evaluation and proposed improvements](docs/REPORT.md)
+- [Presentation and rendering notes](docs/PRESENTATION.md)
+- [Tracker comparison ground truth](docs/tracking_algo_ground_truth.md)
